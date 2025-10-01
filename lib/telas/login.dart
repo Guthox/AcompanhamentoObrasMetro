@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:obras_view/util/cores.dart';
 import '../util/bloc/bloc.dart';
 
 // TODO:
-// Colocar cores do metro
 // Colocar logo do metro
 
 class Login extends StatelessWidget{
@@ -76,7 +76,7 @@ class Login extends StatelessWidget{
         return ElevatedButton(
           onPressed: snapshot.hasData ? () => bloc.submitForm(context) : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
+            backgroundColor: Cores.azulMetro,
             foregroundColor: Colors.white,
           ),
           child: Text("Login"), 

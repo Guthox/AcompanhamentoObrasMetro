@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/material.dart';
+import 'package:obras_view/telas/enviar_imagem.dart';
+import 'package:obras_view/util/cores.dart';
 
 import 'validators.dart';
 import 'package:rxdart/rxdart.dart';
@@ -31,7 +33,7 @@ class Bloc with Validators{
           SnackBar(
             content: Text("Usuário e/ou senha inválidos", textAlign: TextAlign.center,),
             duration: Duration(seconds: 3),
-            backgroundColor: Colors.blue,
+            backgroundColor: Cores.azulMetro,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -41,6 +43,7 @@ class Bloc with Validators{
       }
       else{
         // MOVER PARA PROXIMA TELA
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => EnviarImagem() ));
       }
   }
 
