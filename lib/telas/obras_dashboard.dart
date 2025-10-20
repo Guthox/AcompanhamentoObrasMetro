@@ -1,13 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:obras_view/telas/obra_detalhe.dart';
 import 'package:obras_view/util/cores.dart';
+import 'package:obras_view/util/obras.dart';
 
 class ObrasDashboard extends StatelessWidget {
   // Lista de obras 
-  // TODO obter a lista do servidor ou algo do tipo
-  final List<String> obras = [
-    'Linha 6 - Laranja',
-    'Expansão Linha 2 - Verde',
-    'Reforma Estação Sé',
+  final List<Obras> obras = [
+    Obras(
+      id: 1,
+      nome: 'Linha 6 - Laranja',
+      descricao: 'Construção do túnel principal e estações centrais.',
+      localizacao: 'Zona Norte - São Paulo',
+      status: 'Em andamento',
+      dataInicio: DateTime(2020, 5, 1),
+      responsavel: 'Construtora ABC',
+      imagem: 'assets/metro-sp-logo.png',
+      progresso: 0.7,
+    ),
+    Obras(
+      id: 2,
+      nome: 'Reforma Estação Sé',
+      descricao: 'Reforço estrutural e modernização dos acessos.',
+      localizacao: 'Centro - São Paulo',
+      status: 'Concluída',
+      dataInicio: DateTime(2018, 2, 15),
+      dataFim: DateTime(2021, 10, 30),
+      responsavel: 'Construtora XYZ',
+      imagem: 'assets/metro-sp-logo.png',
+      progresso: 1.0,
+    ),
   ];
 
   @override
@@ -41,12 +62,12 @@ class ObrasDashboard extends StatelessWidget {
     );
   }
 
-  Widget _obraCard(BuildContext context, String nomeObra) {
+  Widget _obraCard(BuildContext context, Obras obraCard) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => ObraDetalhe(nomeObra: nomeObra)),
+          MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard,)),
         );
       },
       child: Card(
@@ -59,7 +80,7 @@ class ObrasDashboard extends StatelessWidget {
           ),
           child: Center(
             child: Text(
-              nomeObra,
+              obraCard.nome,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Cores.azulMetro,
@@ -97,29 +118,6 @@ class ObrasDashboard extends StatelessWidget {
   }
 }
 
-// ====== TELAS DE DESTINO ======
-// TODO mostrar detalhes das obras
-class ObraDetalhe extends StatelessWidget {
-  final String nomeObra;
-
-  const ObraDetalhe({required this.nomeObra, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(nomeObra),
-        backgroundColor: Cores.azulMetro,
-      ),
-      body: Center(
-        child: Text(
-          'Detalhes da obra: $nomeObra',
-          style: const TextStyle(fontSize: 20),
-        ),
-      ),
-    );
-  }
-}
 
 // TODO fazer formulario para adicionar obras
 class NovaObra extends StatelessWidget {
