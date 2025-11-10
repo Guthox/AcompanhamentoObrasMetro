@@ -16,6 +16,7 @@ class ObraDetalhe extends StatelessWidget {
         titleTextStyle: TextStyle(color: Colors.white),
         backgroundColor: Cores.azulMetro,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         child: Column(

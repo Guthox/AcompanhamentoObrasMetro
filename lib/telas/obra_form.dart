@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:obras_view/util/cores.dart';
 import 'package:obras_view/util/info.dart';
 import 'package:obras_view/util/obras.dart';
 
@@ -43,7 +44,12 @@ class _ObraFormPageState extends State<ObraFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Cadastrar Obra")),
+      appBar: AppBar(
+        title: Center(child: const Text("Cadastrar Obra")),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20),
+        backgroundColor: Cores.azulMetro,
+        iconTheme: const IconThemeData(color: Colors.white),
+        ),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 800),
@@ -72,6 +78,12 @@ class _ObraFormPageState extends State<ObraFormPage> {
                         labelText: "Nome da obra",
                         border: OutlineInputBorder(),
                       ),
+                      validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Informe o nome da obra";
+                      }
+                      return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -83,6 +95,12 @@ class _ObraFormPageState extends State<ObraFormPage> {
                         border: OutlineInputBorder(),
                       ),
                       maxLines: 3,
+                      validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Informe a descrição da obra";
+                      }
+                      return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -93,6 +111,12 @@ class _ObraFormPageState extends State<ObraFormPage> {
                         labelText: "Localização",
                         border: OutlineInputBorder(),
                       ),
+                      validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Informe a localização";
+                      }
+                      return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -103,6 +127,12 @@ class _ObraFormPageState extends State<ObraFormPage> {
                         labelText: "Responsável",
                         border: OutlineInputBorder(),
                       ),
+                      validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Informe o responsável";
+                      }
+                      return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 
