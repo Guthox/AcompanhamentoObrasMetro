@@ -63,56 +63,73 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
   }
 
   Widget _obraCard(BuildContext context, Obras obraCard) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
-        );
-      },
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        clipBehavior: Clip.antiAlias,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            image: obraCard.imagem.isNotEmpty
-                ? DecorationImage(
-                    image: AssetImage(obraCard.imagem),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(0.4),
-                      BlendMode.darken,
-                    ),
-                  )
-                : null,
+  return GestureDetector(
+    onTap: () async {
+      // Navega para a tela de detalhes e aguarda um possível retorno
+      final resultado = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
+      );
+
+      // Se o detalhe retornar 'deleted', removemos do dashboard
+      if (resultado == 'deleted') {
+        setState(() {
+          obras.remove(obraCard);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Obra '${obraCard.nome}' excluída com sucesso."),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 2),
           ),
-          child: Stack(
-            children: [
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.black.withOpacity(0.5),
-                  child: Text(
-                    obraCard.nome,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+        );
+      }
+    },
+    child: Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          image: obraCard.imagem.isNotEmpty
+              ? DecorationImage(
+                  image: AssetImage(obraCard.imagem),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withOpacity(0.4),
+                    BlendMode.darken,
+                  ),
+                )
+              : null,
+        ),
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.black.withOpacity(0.5),
+                child: Text(
+                  obraCard.nome,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   Widget _adicionarCard(BuildContext context) {
     return GestureDetector(

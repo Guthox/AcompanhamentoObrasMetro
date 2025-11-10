@@ -13,7 +13,7 @@ class ObraDetalhe extends StatelessWidget {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: Text(obra.nome),
-        titleTextStyle: TextStyle(color: Colors.white),
+        titleTextStyle: const TextStyle(color: Colors.white),
         backgroundColor: Cores.azulMetro,
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -150,6 +150,55 @@ class ObraDetalhe extends StatelessWidget {
                   if (obra.dataFim != null)
                     _infoItem(Icons.flag, "Término",
                         _formatarData(obra.dataFim!)),
+
+                  const SizedBox(height: 40),
+
+                  // === BOTÃO DE EXCLUIR ===
+                  Center(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.delete_outline, color: Colors.white),
+                      label: const Text(
+                        "Excluir obra",
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () async {
+                        final confirmar = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text("Excluir obra"),
+                            content: Text(
+                                "Tem certeza que deseja excluir '${obra.nome}'?"),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text("Cancelar"),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text("Excluir"),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirmar == true) {
+                          Navigator.pop(context, 'deleted');
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
