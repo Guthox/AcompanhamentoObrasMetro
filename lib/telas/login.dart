@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:obras_view/util/cores.dart';
 import '../util/bloc/bloc.dart';
+import 'package:obras_view/telas/cadastro_usuario.dart';
 
 class Login extends StatelessWidget {
   @override
@@ -69,6 +70,18 @@ class Login extends StatelessWidget {
                             width: double.infinity,
                             child: _submitButton(),
                           ),
+
+                          const SizedBox(height: 16.0),
+
+                          TextButton(
+                            onPressed: (){
+                              Navigator.of(context).pushNamed(CadastroUsuarioTela.routeName);
+                            },
+                            child: Text(
+                              'Cadastre-se',
+                              style: TextStyle(color: Cores.azulMetro.withOpacity(0.9)),
+                            )
+                          )
                         ],
                       ),
                     ),
