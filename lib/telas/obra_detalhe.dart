@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:obras_view/telas/enviar_imagem.dart';
 import '../util/cores.dart';
 import '../util/obras.dart';
 
@@ -61,12 +62,7 @@ class ObraDetalhe extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black45,
-                          blurRadius: 8,
-                        )
-                      ],
+                      shadows: [Shadow(color: Colors.black45, blurRadius: 8)],
                     ),
                   ),
                 ),
@@ -145,18 +141,98 @@ class ObraDetalhe extends StatelessWidget {
                   const SizedBox(height: 8),
                   _infoItem(Icons.location_on, "Localização", obra.localizacao),
                   _infoItem(Icons.engineering, "Responsável", obra.responsavel),
-                  _infoItem(Icons.calendar_today, "Início",
-                      _formatarData(obra.dataInicio)),
+                  _infoItem(
+                    Icons.calendar_today,
+                    "Início",
+                    _formatarData(obra.dataInicio),
+                  ),
                   if (obra.dataFim != null)
-                    _infoItem(Icons.flag, "Término",
-                        _formatarData(obra.dataFim!)),
+                    _infoItem(
+                      Icons.flag,
+                      "Término",
+                      _formatarData(obra.dataFim!),
+                    ),
+
+                  const SizedBox(height: 40),
+
+                  // === BOTÕES DE FOTOS ===
+                  const SizedBox(height: 20),
+
+                  Center(
+                    child: Column(
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(
+                            Icons.add_a_photo,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            "Adicionar Fotos",
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Cores.azulMetro,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EnviarImagem(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        ElevatedButton.icon(
+                          icon: const Icon(
+                            Icons.photo_library_outlined,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            "Ver Fotos",
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EnviarImagem(), // MUDAR PARA O HISTORICO DE FOTOS QUANDO TIVER
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
 
                   const SizedBox(height: 40),
 
                   // === BOTÃO DE EXCLUIR ===
                   Center(
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.delete_outline, color: Colors.white),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.white,
+                      ),
                       label: const Text(
                         "Excluir obra",
                         style: TextStyle(color: Colors.white, fontSize: 16),
@@ -164,7 +240,9 @@ class ObraDetalhe extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.redAccent,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 14),
+                          horizontal: 32,
+                          vertical: 14,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -175,7 +253,8 @@ class ObraDetalhe extends StatelessWidget {
                           builder: (context) => AlertDialog(
                             title: const Text("Excluir obra"),
                             content: Text(
-                                "Tem certeza que deseja excluir '${obra.nome}'?"),
+                              "Tem certeza que deseja excluir '${obra.nome}'?",
+                            ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context, false),
@@ -220,7 +299,7 @@ class ObraDetalhe extends StatelessWidget {
             color: Colors.black12,
             blurRadius: 4,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Row(
