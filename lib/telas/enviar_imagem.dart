@@ -1,149 +1,218 @@
-import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart'; // kIsWeb
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:obras_view/util/cores.dart';
 
 class EnviarImagem extends StatefulWidget {
+  final int obraId;
+  const EnviarImagem({super.key, required this.obraId});
+
   @override
   _EnviarImagemState createState() => _EnviarImagemState();
 }
 
 class _EnviarImagemState extends State<EnviarImagem> {
-  final ImagePicker _imgPicker = ImagePicker();
+  final ImagePicker _picker = ImagePicker();
 
-  List<Uint8List> _fotosSelecionadas = [];
+  File? _fotoLocal;
+  Uint8List? _fotoWeb;
 
-  Future<void> _imagemDaGaleria() async {
-    final List<XFile>? imagens = await _imgPicker.pickMultiImage();
+  bool carregando = false;
 
-    if (imagens != null) {
-      for (var img in imagens) {
-        final bytes = await img.readAsBytes(); // funciona no web e mobile
-        _fotosSelecionadas.add(bytes);
+  Future<void> _selecionarImagem() async {
+    final XFile? img = await _picker.pickImage(source: ImageSource.gallery);
+
+    if (img != null) {
+      if (kIsWeb) {
+        _fotoWeb = await img.readAsBytes();
+      } else {
+        _fotoLocal = File(img.path);
       }
       setState(() {});
     }
   }
 
   Future<void> _tirarFoto() async {
-    final XFile? foto = await _imgPicker.pickImage(source: ImageSource.camera);
+    final XFile? img = await _picker.pickImage(source: ImageSource.camera);
 
-    if (foto != null) {
-      final bytes = await foto.readAsBytes(); 
-      setState(() {
-        _fotosSelecionadas.add(bytes);
-      });
+    if (img != null) {
+      if (kIsWeb) {
+        _fotoWeb = await img.readAsBytes();
+      } else {
+        _fotoLocal = File(img.path);
+      }
+      setState(() {});
     }
   }
 
-  void _enviarImagens() {
-    if (_fotosSelecionadas.isEmpty) {
+  Future<void> _enviarParaBackend() async {
+    final bool semImagem =
+        (!kIsWeb && _fotoLocal == null) || (kIsWeb && _fotoWeb == null);
+
+    if (semImagem) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Nenhuma imagem selecionada", textAlign: TextAlign.center),
-          duration: Duration(seconds: 3),
-          backgroundColor: Cores.azulMetro,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        const SnackBar(content: Text("Selecione uma imagem primeiro")),
       );
       return;
     }
 
-    // TODO: envio das imagens
+    setState(() => carregando = true);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Imagens enviadas com sucesso", textAlign: TextAlign.center),
-        duration: Duration(seconds: 3),
-        backgroundColor: Cores.azulMetro,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+    final uri = Uri.parse("http://127.0.0.1:8000/analisar");
+
+    var request = http.MultipartRequest("POST", uri);
+    request.fields["obra_id"] = widget.obraId.toString();
+
+    if (kIsWeb) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          "foto",
+          _fotoWeb!,
+          filename: "upload.jpg",
         ),
-      ),
-    );
+      );
+    } else {
+      request.files.add(
+        await http.MultipartFile.fromPath("foto", _fotoLocal!.path),
+      );
+    }
 
-    setState(() {
-      _fotosSelecionadas.clear();
-    });
+    final resposta = await request.send();
+    final body = await resposta.stream.bytesToString();
+
+    setState(() => carregando = false);
+
+    if (resposta.statusCode == 200) {
+      final dados = jsonDecode(body);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResultadoAnalise(dados: dados),
+        ),
+      );
+
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erro no backend: ${resposta.statusCode}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    Widget preview;
+
+    if (_fotoWeb != null) {
+      preview = Image.memory(_fotoWeb!, fit: BoxFit.cover);
+    } else if (_fotoLocal != null) {
+      preview = Image.file(_fotoLocal!, fit: BoxFit.cover);
+    } else {
+      preview = const Center(child: Text("Nenhuma foto selecionada."));
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text("Enviar fotos")),
+      appBar: AppBar(
+        title: const Text("Enviar Foto da Obra"),
+        backgroundColor: Cores.azulMetro,
+      ),
       body: Column(
         children: [
-          Expanded(
-            child: _fotosSelecionadas.isEmpty
-                ? Center(child: Text("Nenhuma foto selecionada."))
-                : GridView.builder(
-                    padding: EdgeInsets.all(8.0),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 4,
-                      mainAxisSpacing: 4,
-                    ),
-                    itemCount: _fotosSelecionadas.length,
-                    itemBuilder: (context, index) {
-                      return Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8.0),
-                            child: Image.memory(
-                              _fotosSelecionadas[index],
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                            ),
-                          ),
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _fotosSelecionadas.removeAt(index);
-                                });
-                              },
-                              child: CircleAvatar(
-                                radius: 12,
-                                backgroundColor: Colors.black,
-                                child: Icon(Icons.close,
-                                    size: 16, color: Colors.white),
-                              ),
-                            ),
-                          )
-                        ],
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: preview),
+
+          if (carregando) const LinearProgressIndicator(),
+
           Padding(
-            padding: EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 ElevatedButton.icon(
-                    onPressed: _imagemDaGaleria,
-                    icon: Icon(Icons.photo_library),
-                    label: Text("Galeria")),
+                  onPressed: _selecionarImagem,
+                  icon: const Icon(Icons.photo),
+                  label: const Text("Galeria"),
+                ),
                 ElevatedButton.icon(
-                    onPressed: _tirarFoto,
-                    icon: Icon(Icons.camera_alt),
-                    label: Text("Câmera")),
+                  onPressed: _tirarFoto,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text("Câmera"),
+                ),
                 ElevatedButton.icon(
-                    onPressed: _enviarImagens,
-                    icon: Icon(Icons.cloud_upload),
-                    label: Text("Enviar Imagens"))
+                  onPressed: carregando ? null : _enviarParaBackend,
+                  icon: const Icon(Icons.cloud_upload),
+                  label: const Text("Enviar"),
+                ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
   }
 }
+
+class ResultadoAnalise extends StatelessWidget {
+  final Map dados;
+
+  const ResultadoAnalise({super.key, required this.dados});
+
+  @override
+  Widget build(BuildContext context) {
+    final progresso = (dados["progresso_total"] * 100).toStringAsFixed(2);
+
+    final String imagem = dados["imagem_anotada"];
+    final String url = "http://localhost:8000/resultados/$imagem?v=${DateTime.now().millisecondsSinceEpoch}";
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Resultado da Análise"),
+        backgroundColor: Cores.azulMetro,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Progresso total da obra:",
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              "$progresso%",
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 25),
+
+            const Text(
+              "Imagem analisada:",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 10),
+
+            Expanded(
+              child: Image.network(
+                url,
+                key: ValueKey(url),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                  const Center(child: Text("Erro ao carregar imagem")),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

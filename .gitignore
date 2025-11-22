@@ -1,3 +1,9 @@
 .dart_tool/
 build/
 .*
+ifc1.ifc
+ifc3.ifc
+ifc4.ifc
+*.pt
+backend/resultados/*
+backend/__pycache__

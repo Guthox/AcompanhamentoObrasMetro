@@ -184,7 +184,7 @@ class ObraDetalhe extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => EnviarImagem(),
+                                builder: (_) => EnviarImagem(obraId: obra.id,),
                               ),
                             );
                           },
@@ -215,7 +215,7 @@ class ObraDetalhe extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => EnviarImagem(), // MUDAR PARA O HISTORICO DE FOTOS QUANDO TIVER
+                                builder: (_) => EnviarImagem(obraId: obra.id,), // MUDAR PARA O HISTORICO DE FOTOS QUANDO TIVER
                               ),
                             );
                           },
