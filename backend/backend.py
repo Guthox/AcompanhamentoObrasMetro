@@ -41,7 +41,7 @@ def obter_resultado(arquivo: str):
 # CONFIGURAÇÃO DO YOLO + IFC
 # ============================
 MODEL_PATH = "best.pt"
-IFC_PATH = "ifc2.ifc"
+IFC_PATH = "ifc4.ifc"
 OUTPUT_DIR = "resultados"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -63,14 +63,13 @@ ifc = ifcopenshell.open(IFC_PATH)
 
 TIPOS_IFC = {
     "IfcWall": "Wall",
-    "IfcMember": "Column",
-    "IfcMember": "Beam",
+    "IfcMember": "Column",   # COLUNAS DO YOLO → IfcMember NO IFC
+    "IfcBeam": "Beam",
     "IfcSlab": "Slab",
     "IfcDoor": "Door",
     "IfcWindow": "Window",
 }
 
-# Conta itens no IFC
 planejado = {tipo: len(ifc.by_type(tipo)) for tipo in TIPOS_IFC}
 
 

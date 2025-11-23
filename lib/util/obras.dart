@@ -1,26 +1,34 @@
-class Obras {
+import 'dart:typed_data';
 
+class Obras {
   final int id;
   final String nome;
   final String descricao;
   final String localizacao;
-  final String status;        // "Em andamento", "Concluída", "Parada"
+  final String responsavel;
+  final String status;
   final DateTime dataInicio;
   final DateTime? dataFim;
-  final String responsavel;   // Engenheiro ou empresa
-  final String imagem;        // Caminho para imagem local ou URL
-  final double progresso;     // Percentual (0.0 a 1.0)
+  final String imagem;
+  final double progresso;
+
+  final String? ifcPath;     // para Android/iOS/Desktop
+  final Uint8List? ifcBytes; // para Web
+  final String? ifcName;     // nome do arquivo IFC
 
   Obras({
     required this.id,
     required this.nome,
     required this.descricao,
     required this.localizacao,
+    required this.responsavel,
     required this.status,
     required this.dataInicio,
-    this.dataFim,
-    required this.responsavel,
+    required this.dataFim,
     required this.imagem,
-    this.progresso = 0.0,
+    required this.progresso,
+    this.ifcPath,
+    this.ifcBytes,
+    this.ifcName,
   });
 }

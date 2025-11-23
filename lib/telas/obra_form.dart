@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'; // kIsWeb
 import 'package:obras_view/util/cores.dart';
-import 'package:obras_view/util/info.dart';
 import 'package:obras_view/util/obras.dart';
 
 class ObraFormPage extends StatefulWidget {
@@ -17,9 +18,13 @@ class _ObraFormPageState extends State<ObraFormPage> {
   final _descricaoController = TextEditingController();
   final _localizacaoController = TextEditingController();
   final _responsavelController = TextEditingController();
+
   DateTime? _dataInicio;
   DateTime? _dataFim;
   String _status = 'Em andamento';
+
+  // Arquivo IFC
+  PlatformFile? _ifcFile;
 
   Future<void> _selecionarDataInicio() async {
     final data = await showDatePicker(
@@ -41,6 +46,19 @@ class _ObraFormPageState extends State<ObraFormPage> {
     if (data != null) setState(() => _dataFim = data);
   }
 
+  // Selecionar IFC
+  Future<void> _selecionarIFC() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ["ifc"],
+      withData: true, // NECESSÁRIO NO WEB
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      setState(() => _ifcFile = result.files.first);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -50,13 +68,8 @@ class _ObraFormPageState extends State<ObraFormPage> {
         backgroundColor: Cores.azulMetro,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-
-      // =============================
-      //     FUNDO + FORMULÁRIO
-      // =============================
       body: Stack(
         children: [
-          // ---- FUNDO COM IMAGEM ----
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
@@ -69,8 +82,6 @@ class _ObraFormPageState extends State<ObraFormPage> {
               ),
             ),
           ),
-
-          // ---- FORMULÁRIO EM CARD ----
           Center(
             child: Container(
               constraints: const BoxConstraints(maxWidth: 800),
@@ -93,9 +104,6 @@ class _ObraFormPageState extends State<ObraFormPage> {
     );
   }
 
-  // =============================
-  //         FORM COMPLETO
-  // =============================
   Widget _buildForm() {
     return Form(
       key: _formKey,
@@ -107,6 +115,7 @@ class _ObraFormPageState extends State<ObraFormPage> {
             style: Theme.of(context).textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
+
           const SizedBox(height: 24),
 
           // Nome
@@ -116,9 +125,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
               labelText: "Nome da obra",
               border: OutlineInputBorder(),
             ),
-            validator: (value) =>
-                value == null || value.isEmpty ? "Informe o nome da obra" : null,
+            validator: (v) => v!.isEmpty ? "Informe o nome da obra" : null,
           ),
+
           const SizedBox(height: 16),
 
           // Descrição
@@ -129,9 +138,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
               border: OutlineInputBorder(),
             ),
             maxLines: 3,
-            validator: (value) =>
-                value == null || value.isEmpty ? "Informe a descrição" : null,
+            validator: (v) => v!.isEmpty ? "Informe a descrição" : null,
           ),
+
           const SizedBox(height: 16),
 
           // Localização
@@ -141,9 +150,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
               labelText: "Localização",
               border: OutlineInputBorder(),
             ),
-            validator: (value) =>
-                value == null || value.isEmpty ? "Informe a localização" : null,
+            validator: (v) => v!.isEmpty ? "Informe a localização" : null,
           ),
+
           const SizedBox(height: 16),
 
           // Responsável
@@ -153,9 +162,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
               labelText: "Responsável",
               border: OutlineInputBorder(),
             ),
-            validator: (value) =>
-                value == null || value.isEmpty ? "Informe o responsável" : null,
+            validator: (v) => v!.isEmpty ? "Informe o responsável" : null,
           ),
+
           const SizedBox(height: 16),
 
           // Status
@@ -172,7 +181,21 @@ class _ObraFormPageState extends State<ObraFormPage> {
             ],
             onChanged: (value) => setState(() => _status = value!),
           ),
+
           const SizedBox(height: 16),
+
+          // Selecionar IFC
+          OutlinedButton.icon(
+            onPressed: _selecionarIFC,
+            icon: const Icon(Icons.upload_file),
+            label: Text(
+              _ifcFile == null
+                  ? "Selecionar arquivo IFC"
+                  : "Selecionado: ${_ifcFile!.name}",
+            ),
+          ),
+
+          const SizedBox(height: 20),
 
           // Datas
           Row(
@@ -201,31 +224,43 @@ class _ObraFormPageState extends State<ObraFormPage> {
             ],
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 30),
 
           // Botão Salvar
           ElevatedButton.icon(
             onPressed: () {
-              if (_formKey.currentState!.validate()) {
-                final obra = Obras(
-                  id: DateTime.now().millisecondsSinceEpoch,
-                  nome: _nomeController.text,
-                  descricao: _descricaoController.text,
-                  localizacao: _localizacaoController.text,
-                  status: _status,
-                  dataInicio: _dataInicio ?? DateTime.now(),
-                  dataFim: _dataFim,
-                  responsavel: _responsavelController.text,
-                  imagem: "assets/metro-sp-logo.png",
-                  progresso: 0.0,
-                );
+              if (!_formKey.currentState!.validate()) return;
 
-                Navigator.pop(context, obra);
-
+              if (_ifcFile == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Obra salva com sucesso!")),
+                  const SnackBar(content: Text("Selecione um arquivo IFC")),
                 );
+                return;
               }
+
+              final obra = Obras(
+                id: DateTime.now().millisecondsSinceEpoch,
+                nome: _nomeController.text,
+                descricao: _descricaoController.text,
+                localizacao: _localizacaoController.text,
+                status: _status,
+                dataInicio: _dataInicio ?? DateTime.now(),
+                dataFim: _dataFim,
+                responsavel: _responsavelController.text,
+                imagem: "assets/metro-sp-logo.png",
+                progresso: 0.0,
+
+                // Correção final:
+                ifcName: _ifcFile!.name,
+                ifcPath: kIsWeb ? null : _ifcFile!.path,
+                ifcBytes: kIsWeb ? _ifcFile!.bytes : null,
+              );
+
+              Navigator.pop(context, obra);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Obra salva com sucesso!")),
+              );
             },
             icon: const Icon(Icons.save),
             label: const Text("Salvar"),

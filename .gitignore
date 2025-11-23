@@ -2,6 +2,7 @@
 build/
 .*
 ifc1.ifc
+ifc2.ifc
 ifc3.ifc
 ifc4.ifc
 *.pt
