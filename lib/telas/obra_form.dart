@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart'; // kIsWeb
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:obras_view/util/cores.dart';
 import 'package:obras_view/util/obras.dart';
 
@@ -23,9 +26,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
   DateTime? _dataFim;
   String _status = 'Em andamento';
 
-  // Arquivo IFC
   PlatformFile? _ifcFile;
 
+  // =============================== DATE PICKERS ===============================
   Future<void> _selecionarDataInicio() async {
     final data = await showDatePicker(
       context: context,
@@ -46,12 +49,12 @@ class _ObraFormPageState extends State<ObraFormPage> {
     if (data != null) setState(() => _dataFim = data);
   }
 
-  // Selecionar IFC
+  // =============================== PICK IFC ===============================
   Future<void> _selecionarIFC() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ["ifc"],
-      withData: true, // NECESSÁRIO NO WEB
+      withData: true,
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -59,15 +62,47 @@ class _ObraFormPageState extends State<ObraFormPage> {
     }
   }
 
+  // =========================== ENVIA IFC PARA BACKEND ===========================
+  Future<bool> enviarIFCParaBackend(int obraId) async {
+    if (_ifcFile == null) return false;
+
+    final uri = Uri.parse("http://127.0.0.1:8000/enviar_ifc");
+
+    var request = http.MultipartRequest("POST", uri);
+    request.fields["obra_id"] = obraId.toString();
+
+    if (kIsWeb) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          "ifc",
+          _ifcFile!.bytes!,
+          filename: _ifcFile!.name,
+        ),
+      );
+    } else {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          "ifc",
+          _ifcFile!.path!,
+          filename: _ifcFile!.name,
+        ),
+      );
+    }
+
+    final resposta = await request.send();
+    return resposta.statusCode == 200;
+  }
+
+  // =============================== BUILD ===================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Center(child: Text("Cadastrar Obra")),
-        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20),
         backgroundColor: Cores.azulMetro,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
+
       body: Stack(
         children: [
           Container(
@@ -82,13 +117,13 @@ class _ObraFormPageState extends State<ObraFormPage> {
               ),
             ),
           ),
+
           Center(
             child: Container(
               constraints: const BoxConstraints(maxWidth: 800),
               padding: const EdgeInsets.all(32),
               child: Card(
                 elevation: 6,
-                shadowColor: Colors.black45,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -104,11 +139,11 @@ class _ObraFormPageState extends State<ObraFormPage> {
     );
   }
 
+  // =============================== FORM ===================================
   Widget _buildForm() {
     return Form(
       key: _formKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             "Informações da Obra",
@@ -118,56 +153,18 @@ class _ObraFormPageState extends State<ObraFormPage> {
 
           const SizedBox(height: 24),
 
-          // Nome
-          TextFormField(
-            controller: _nomeController,
-            decoration: const InputDecoration(
-              labelText: "Nome da obra",
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) => v!.isEmpty ? "Informe o nome da obra" : null,
-          ),
+          _campoTexto(_nomeController, "Nome da obra"),
+          _spacer(),
 
-          const SizedBox(height: 16),
+          _campoTexto(_descricaoController, "Descrição", maxLines: 3),
+          _spacer(),
 
-          // Descrição
-          TextFormField(
-            controller: _descricaoController,
-            decoration: const InputDecoration(
-              labelText: "Descrição",
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 3,
-            validator: (v) => v!.isEmpty ? "Informe a descrição" : null,
-          ),
+          _campoTexto(_localizacaoController, "Localização"),
+          _spacer(),
 
-          const SizedBox(height: 16),
+          _campoTexto(_responsavelController, "Responsável"),
+          _spacer(),
 
-          // Localização
-          TextFormField(
-            controller: _localizacaoController,
-            decoration: const InputDecoration(
-              labelText: "Localização",
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) => v!.isEmpty ? "Informe a localização" : null,
-          ),
-
-          const SizedBox(height: 16),
-
-          // Responsável
-          TextFormField(
-            controller: _responsavelController,
-            decoration: const InputDecoration(
-              labelText: "Responsável",
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) => v!.isEmpty ? "Informe o responsável" : null,
-          ),
-
-          const SizedBox(height: 16),
-
-          // Status
           DropdownButtonFormField<String>(
             value: _status,
             decoration: const InputDecoration(
@@ -182,9 +179,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
             onChanged: (value) => setState(() => _status = value!),
           ),
 
-          const SizedBox(height: 16),
+          _spacer(),
 
-          // Selecionar IFC
+          // =============================== SELECT IFC ===============================
           OutlinedButton.icon(
             onPressed: _selecionarIFC,
             icon: const Icon(Icons.upload_file),
@@ -195,9 +192,9 @@ class _ObraFormPageState extends State<ObraFormPage> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 30),
 
-          // Datas
+          // =============================== DATAS ===============================
           Row(
             children: [
               Expanded(
@@ -226,9 +223,11 @@ class _ObraFormPageState extends State<ObraFormPage> {
 
           const SizedBox(height: 30),
 
-          // Botão Salvar
+          // =============================== SALVAR ===============================
           ElevatedButton.icon(
-            onPressed: () {
+            icon: const Icon(Icons.save),
+            label: const Text("Salvar"),
+            onPressed: () async {
               if (!_formKey.currentState!.validate()) return;
 
               if (_ifcFile == null) {
@@ -238,8 +237,10 @@ class _ObraFormPageState extends State<ObraFormPage> {
                 return;
               }
 
+              final obraId = DateTime.now().millisecondsSinceEpoch;
+
               final obra = Obras(
-                id: DateTime.now().millisecondsSinceEpoch,
+                id: obraId,
                 nome: _nomeController.text,
                 descricao: _descricaoController.text,
                 localizacao: _localizacaoController.text,
@@ -249,28 +250,39 @@ class _ObraFormPageState extends State<ObraFormPage> {
                 responsavel: _responsavelController.text,
                 imagem: "assets/metro-sp-logo.png",
                 progresso: 0.0,
-
-                // Correção final:
                 ifcName: _ifcFile!.name,
                 ifcPath: kIsWeb ? null : _ifcFile!.path,
                 ifcBytes: kIsWeb ? _ifcFile!.bytes : null,
               );
 
-              Navigator.pop(context, obra);
+              final ok = await enviarIFCParaBackend(obraId);
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Obra salva com sucesso!")),
-              );
+              if (!ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Erro ao enviar IFC")),
+                );
+                return;
+              }
+
+              Navigator.pop(context, obra);
             },
-            icon: const Icon(Icons.save),
-            label: const Text("Salvar"),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              textStyle: const TextStyle(fontSize: 18),
-            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _campoTexto(TextEditingController c, String label, {int maxLines = 1}) {
+    return TextFormField(
+      controller: c,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+      maxLines: maxLines,
+      validator: (v) => v!.isEmpty ? "Campo obrigatório" : null,
+    );
+  }
+
+  Widget _spacer() => const SizedBox(height: 16);
 }

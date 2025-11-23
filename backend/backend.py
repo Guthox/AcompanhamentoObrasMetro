@@ -1,17 +1,14 @@
-import ifcopenshell
 from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import FileResponse
+import ifcopenshell
+import os
 import shutil
 from ultralytics import YOLO
+from time import time
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
-from time import time
-import os
 
 app = FastAPI()
 
-# Fix Cors
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,67 +16,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/resultados", StaticFiles(directory="resultados"), name="resultados")
-
-@app.get("/resultados/{arquivo}")
-def obter_resultado(arquivo: str):
-    caminho = os.path.join("resultados", arquivo)
-
-    if not os.path.exists(caminho):
-        return {"erro": "Arquivo não encontrado"}
-
-    return FileResponse(
-        caminho,
-        media_type="image/jpeg",
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
-        }
-    )
-
-
-# ============================
-# CONFIGURAÇÃO DO YOLO + IFC
-# ============================
-MODEL_PATH = "best.pt"
-IFC_PATH = "ifc4.ifc"
+# Pastas
 OUTPUT_DIR = "resultados"
+IFC_DIR = "obras_ifc"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(IFC_DIR, exist_ok=True)
 
-print("Carregando modelo YOLO...")
-model = YOLO(MODEL_PATH)
+# YOLO
+model = YOLO("best.pt")
 
-print("Carregando arquivo IFC...")
-ifc = ifcopenshell.open(IFC_PATH)
-
-# TIPOS_IFC = {
-#     "IfcWall": "Wall",
-#     "IfcColumn": "Column",
-#     "IfcBeam": "Beam",
-#     "IfcSlab": "Slab",
-#     "IfcDoor": "Door",
-#     "IfcWindow": "Window",
-# }
-
+# MAPEAMENTO
 TIPOS_IFC = {
     "IfcWall": "Wall",
-    "IfcMember": "Column",   # COLUNAS DO YOLO → IfcMember NO IFC
+    "IfcMember": "Column",
     "IfcBeam": "Beam",
     "IfcSlab": "Slab",
     "IfcDoor": "Door",
     "IfcWindow": "Window",
 }
 
-planejado = {tipo: len(ifc.by_type(tipo)) for tipo in TIPOS_IFC}
+app.mount("/resultados", StaticFiles(directory=OUTPUT_DIR), name="resultados")
 
+@app.post("/enviar_ifc")
+async def enviar_ifc(
+    obra_id: int = Form(...),
+    ifc: UploadFile = File(...)
+):
+    """Recebe e salva o arquivo IFC vinculado à obra."""
 
-# ============================
-# ROTAS
-# ============================
+    IFC_DIR = "obras_ifc"
+    os.makedirs(IFC_DIR, exist_ok=True)
 
-@app.get("/ping")
-def ping():
-    return {"status": "ok"}
+    destino = f"{IFC_DIR}/obra_{obra_id}.ifc"
+
+    with open(destino, "wb") as f:
+        f.write(await ifc.read())
+
+    return {"status": "ok", "msg": "IFC salvo com sucesso", "arquivo": destino}
+
 
 
 @app.post("/analisar")
@@ -87,70 +62,81 @@ async def analisar(
     obra_id: int = Form(...),
     foto: UploadFile = File(...)
 ):
-    """Recebe uma imagem, roda YOLO e compara com IFC."""
-    
-    # Salvar imagem temporária
+    # -------------------------
+    # 1) CARREGA IFC DA OBRA
+    # -------------------------
+    caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc"
+
+    if not os.path.exists(caminho_ifc):
+        return {"erro": f"Arquivo IFC da obra {obra_id} não encontrado"}
+
+    ifc = ifcopenshell.open(caminho_ifc)
+
+    # Conta planejado
+    planejado = {tipo: len(ifc.by_type(tipo)) for tipo in TIPOS_IFC}
+
+    # -------------------------
+    # 2) Salva imagem enviada
+    # -------------------------
     temp_path = f"{OUTPUT_DIR}/obra_{obra_id}_entrada.jpg"
+
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(foto.file, buffer)
 
-    # Rodar YOLO
-    resultado = model(temp_path)[0]
+    # -------------------------
+    # 3) YOLO
+    # -------------------------
+    result = model(temp_path)[0]
 
-    # Criar imagem anotada. USA TEMPO PARA DESATIVAR CACHE NO SITE
+    # Salva imagem anotada SEM duplicar diretórios
     ts = int(time() * 1000)
-    anotada_filename = f"obra_{obra_id}_anotada_{ts}.jpg"
-    anotada_path = f"resultados/{anotada_filename}"
-    resultado.save(filename=anotada_path)
+    anotada_filename = f"anotada_{obra_id}_{ts}.jpg"
+    anotada_path = f"{OUTPUT_DIR}/{anotada_filename}"
 
-    # anotada_path = f"{OUTPUT_DIR}/obra_{obra_id}_anotada.jpg"
-    # resultado.save(filename=anotada_path)
+    result.save(filename=anotada_path)
 
-    # Contar detecções YOLO
+    # -------------------------
+    # 4) Detecções YOLO
+    # -------------------------
     detectado = {}
-    for det in resultado.boxes:
-        classe = model.names[int(det.cls)]
-        detectado[classe] = detectado.get(classe, 0) + 1
 
-    # Converter YOLO → IFC
-    detectado_ifc = {tipo: 0 for tipo in TIPOS_IFC}
+    for det in result.boxes:
+        nome = model.names[int(det.cls)]
+        detectado[nome] = detectado.get(nome, 0) + 1
 
-    for ifc_tipo, nome_yolo in TIPOS_IFC.items():
-        detectado_ifc[ifc_tipo] = detectado.get(nome_yolo, 0)
+    # YOLO → IFC
+    detect_ifc = {
+        tipo: detectado.get(nome_yolo, 0)
+        for tipo, nome_yolo in TIPOS_IFC.items()
+    }
 
-    # Calcular progresso
-    total_planejado = sum(planejado.values())
+    # -------------------------
+    # 5) Progresso
+    # -------------------------
+    total_plan = sum(planejado.values()) or 1
+    pesos = {t: planejado[t] / total_plan for t in planejado}
+
     progresso_total = 0
-    pesos = {t: planejado[t] / total_planejado for t in planejado}
+    progresso_tipo = {}
 
-    progresso_por_tipo = {}
+    for tipo in planejado:
+        det = detect_ifc[tipo]
+        plan = planejado[tipo]
 
-    for tipo_ifc, quant_plan in planejado.items():
-        quant_det = detectado_ifc[tipo_ifc]
-
-        prog = (quant_det / quant_plan) if quant_plan > 0 else 0
-        progresso_por_tipo[tipo_ifc] = round(prog * 100, 2)
-
-        progresso_total += prog * pesos[tipo_ifc]
+        pct = det / plan if plan > 0 else 0
+        progresso_tipo[tipo] = round(pct * 100, 2)
+        progresso_total += pct * pesos[tipo]
 
     progresso_total = round(progresso_total * 100, 2)
 
-    # Retorno
+    # -------------------------
+    # 6) Retorno
+    # -------------------------
     return {
-    "obra_id": obra_id,
-    "planejado": planejado,
-    "detectado": detectado,
-    "progresso_por_tipo": progresso_por_tipo,
-    "progresso_total": progresso_total,
-    "imagem_anotada": anotada_filename  
-}
-
-
-
-@app.get("/imagem/{arquivo}")
-def imagem(arquivo: str):
-    """Retorna imagem anotada."""
-    caminho = f"{OUTPUT_DIR}/{arquivo}"
-    if os.path.exists(caminho):
-        return FileResponse(caminho)
-    return {"erro": "Arquivo não encontrado"}
+        "obra_id": obra_id,
+        "planejado": planejado,
+        "detectado": detectado,
+        "progresso_por_tipo": progresso_tipo,
+        "progresso_total": progresso_total,
+        "imagem_anotada": anotada_filename
+    }

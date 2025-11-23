@@ -98,7 +98,7 @@ class _EnviarImagemState extends State<EnviarImagem> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Erro no backend: ${resposta.statusCode}"),
+          content: Text("Erro no backend: ${resposta.statusCode} - $body"),
           backgroundColor: Colors.red,
         ),
       );
@@ -164,55 +164,68 @@ class ResultadoAnalise extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progresso = (dados["progresso_total"] * 100).toStringAsFixed(2);
-
-    final String imagem = dados["imagem_anotada"];
-    final String url = "http://localhost:8000/resultados/$imagem?v=${DateTime.now().millisecondsSinceEpoch}";
+    final progresso = (dados["progresso_total"] ?? 0).toString();
+    final cacheBuster = DateTime.now().millisecondsSinceEpoch;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Resultado da Análise"),
         backgroundColor: Cores.azulMetro,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Progresso total da obra:",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            Text(
-              "$progresso%",
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 25),
-
-            const Text(
-              "Imagem analisada:",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: Image.network(
-                url,
-                key: ValueKey(url),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
-                  const Center(child: Text("Erro ao carregar imagem")),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // --- Progresso total ---
+              Text(
+                "Progresso total",
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
-          ],
+
+              const SizedBox(height: 10),
+
+              Text(
+                "$progresso%",
+                style: const TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 30),
+
+              // --- Imagem analisada ---
+              if (dados["imagem_anotada"] != null) ...[
+                const Text(
+                  "Imagem Analisada",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    "http://127.0.0.1:8000/resultados/${dados["imagem_anotada"]}?v=$cacheBuster",
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        const Text("Falha ao carregar imagem."),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
-
