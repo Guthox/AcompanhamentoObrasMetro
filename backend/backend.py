@@ -39,7 +39,7 @@ try:
 except Exception as e:
     print(f"Erro ao tentar criar database: {e}")
 
-
+#utilizar a senha do seu sql
 SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:123456@localhost:3306/metro_sp"
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
@@ -66,7 +66,7 @@ class ObraDB(Base):
     data_inicio = Column(DateTime)
     data_fim = Column(DateTime, nullable=True)
     progresso = Column(Float, default=0.0)
-    # Note que NÃO salvamos nada sobre IFC aqui.
+    caminho_ifc = Column(String(255), nullable=True)
 
 # Cria as tabelas automaticamente ao iniciar o código
 Base.metadata.create_all(bind=engine)
@@ -154,7 +154,8 @@ def criar_obra_db(obra: ObraCreate, db: Session = Depends(get_db)):
         status=obra.status,
         data_inicio=dt_inicio,
         data_fim=dt_fim,
-        progresso=0.0
+        progresso=0.0,
+        caminho_ifc=""
     )
     db.add(nova)
     db.commit()
@@ -163,7 +164,8 @@ def criar_obra_db(obra: ObraCreate, db: Session = Depends(get_db)):
 @app.post("/enviar_ifc")
 async def enviar_ifc(
     obra_id: int = Form(...),
-    ifc: UploadFile = File(...)
+    ifc: UploadFile = File(...),
+    db: Session = Depends(get_db)
 ):
     """Recebe e salva o arquivo IFC vinculado à obra."""
 
@@ -174,6 +176,11 @@ async def enviar_ifc(
 
     with open(destino, "wb") as f:
         f.write(await ifc.read())
+
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    if obra:
+        obra.caminho_ifc = destino
+        db.commit()
 
     return {"status": "ok", "msg": "IFC salvo com sucesso", "arquivo": destino}
 
@@ -192,6 +199,7 @@ def listar_obras(db: Session = Depends(get_db)):
             "data_inicio": o.data_inicio.isoformat(),
             "data_fim": o.data_fim.isoformat() if o.data_fim else None,
             "progresso": o.progresso,
+            "caminho_ifc": o.caminho_ifc
         }
         for o in obras
     ]
@@ -230,7 +238,8 @@ def get_obra(obra_id: int, db: Session = Depends(get_db)):
         "status": obra.status,
         "data_inicio": obra.data_inicio.isoformat(),
         "data_fim": obra.data_fim.isoformat() if obra.data_fim else None,
-        "progresso": obra.progresso
+        "progresso": obra.progresso,
+        "caminho_ifc": obra.caminho_ifc
     }
 
 
@@ -244,7 +253,12 @@ async def analisar(
     # -------------------------
     # 1) CARREGA IFC DA OBRA
     # -------------------------
-    caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc"
+    obra_db = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    
+    if obra_db and obra_db.caminho_ifc:
+        caminho_ifc = obra_db.caminho_ifc
+    else:
+        caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc" # Fallback
 
     if not os.path.exists(caminho_ifc):
         return {"erro": f"Arquivo IFC da obra {obra_id} não encontrado"}
