@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 import 'package:obras_view/util/cores.dart';
 import 'package:obras_view/util/obras.dart';
@@ -91,6 +92,31 @@ class _ObraFormPageState extends State<ObraFormPage> {
 
     final resposta = await request.send();
     return resposta.statusCode == 200;
+  }
+
+// =========================== ENVIA DADOS PARA O BANCO ===========================
+  Future<bool> salvarDadosObraDB(int obraId) async {
+      final uri = Uri.parse("http://127.0.0.1:8000/criar_obra");
+      try {
+        final response = await http.post(
+            uri,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+                "id": obraId,
+                "nome": _nomeController.text,
+                "descricao": _descricaoController.text,
+                "localizacao": _localizacaoController.text,
+                "responsavel": _responsavelController.text,
+                "status": _status,
+                "data_inicio": (_dataInicio ?? DateTime.now()).toIso8601String(),
+                "data_fim": _dataFim?.toIso8601String(),
+            })
+        );
+        return response.statusCode == 200;
+      } catch (e) {
+        print("Erro DB: $e");
+        return false;
+      }
   }
 
   // =============================== BUILD ===================================
@@ -232,15 +258,29 @@ class _ObraFormPageState extends State<ObraFormPage> {
               if (!_formKey.currentState!.validate()) return;
 
               if (_ifcFile == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Selecione um arquivo IFC")),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Selecione um arquivo IFC")));
                 return;
               }
 
               final obraId = DateTime.now().millisecondsSinceEpoch;
 
-              final obra = Obras(
+              // 1. SALVAR METADADOS NO BANCO (MySQL)
+              final dbOk = await salvarDadosObraDB(obraId);
+              if (!dbOk) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao salvar dados no banco.")));
+                  return;
+              }
+
+              // 2. SALVAR ARQUIVO NO DISCO (Backend)
+              final arqOk = await enviarIFCParaBackend(obraId);
+              if (!arqOk) {
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao enviar arquivo IFC.")));
+                   return;
+              }
+
+              // Sucesso total
+              // Cria objeto local apenas para retorno da navegação (opcional)
+               final obra = Obras(
                 id: obraId,
                 nome: _nomeController.text,
                 descricao: _descricaoController.text,

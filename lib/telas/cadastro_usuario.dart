@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import '../util/cores.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class CadastroUsuarioTela extends StatefulWidget {
   
@@ -28,19 +30,38 @@ class _CadastroUsuarioTelaState extends State<CadastroUsuarioTela> {
     super.dispose();
   }
 
-  void _submitForm() {
+  Future<void> _submitForm() async {
     if (_formKey.currentState?.validate() ?? false) {
-      String nome = _nomeController.text;
-      String email = _emailController.text;
       
-      // Simulação de cadastro
-      print('Simulando cadastro: Nome: $nome, Email: $email');
+      final url = Uri.parse('http://127.0.0.1:8000/cadastro');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cadastro enviado (simulação)!')),
-      );
+      try {
+        final response = await http.post(
+          url,
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "nome": _nomeController.text,
+            "email": _emailController.text,
+            "senha": _senhaController.text,
+          }),
+        );
 
-      Navigator.of(context).pop();
+        if (response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Usuário cadastrado com sucesso!')),
+          );
+          Navigator.of(context).pop(); // Volta para login
+        } else {
+          // Exibe erro (ex: email já existe)
+          ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Erro: Email já cadastrado.'), backgroundColor: Colors.red),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Erro de conexão: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
