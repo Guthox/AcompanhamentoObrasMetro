@@ -1,6 +1,6 @@
 import ifcopenshell
 
-ifc = ifcopenshell.open("ifc2.ifc")
+ifc = ifcopenshell.open("ifc14.ifc")
 
 tipos = {}
 

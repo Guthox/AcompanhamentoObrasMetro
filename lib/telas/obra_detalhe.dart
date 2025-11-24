@@ -1,15 +1,127 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:obras_view/telas/enviar_imagem.dart';
 import '../util/cores.dart';
 import '../util/obras.dart';
 
-class ObraDetalhe extends StatelessWidget {
+class ObraDetalhe extends StatefulWidget {
   final Obras obra;
 
   const ObraDetalhe({required this.obra, super.key});
 
   @override
+  State<ObraDetalhe> createState() => _ObraDetalheState();
+}
+
+class _ObraDetalheState extends State<ObraDetalhe> {
+  Obras? obraAtualizada;
+  bool carregando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarObra();
+  }
+
+  // ======================================================
+  // 🔥 BUSCA A OBRA REAL NO BACKEND (PROGRESSO ATUALIZADO)
+  // ======================================================
+  Future<void> _carregarObra() async {
+    final url = Uri.parse("http://127.0.0.1:8000/obra/${widget.obra.id}");
+
+    final resp = await http.get(url);
+
+    if (resp.statusCode == 200) {
+      final dados = jsonDecode(resp.body);
+
+      setState(() {
+        obraAtualizada = Obras(
+          id: dados["id"],
+          nome: dados["nome"],
+          descricao: dados["descricao"],
+          localizacao: dados["localizacao"],
+          responsavel: dados["responsavel"],
+          status: dados["status"],
+          dataInicio: DateTime.parse(dados["data_inicio"]),
+          dataFim: dados["data_fim"] != null
+              ? DateTime.parse(dados["data_fim"])
+              : null,
+          imagem: widget.obra.imagem, // mantém imagem local
+          progresso: (dados["progresso"] ?? 0.0).toDouble(),
+          ifcName: widget.obra.ifcName,
+          ifcPath: widget.obra.ifcPath,
+          ifcBytes: widget.obra.ifcBytes,
+        );
+
+        carregando = false;
+      });
+    } else {
+      // Se der erro, usa os dados locais
+      setState(() => carregando = false);
+    }
+  }
+
+  // ===========================
+  //  FORMATAÇÃO DE DATA
+  // ===========================
+  String _formatarData(DateTime data) {
+    return "${data.day.toString().padLeft(2, '0')}/"
+        "${data.month.toString().padLeft(2, '0')}/"
+        "${data.year}";
+  }
+
+  // ===========================
+  //  ITEM DE INFORMAÇÃO
+  // ===========================
+  Widget _infoItem(IconData icon, String titulo, String valor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Cores.azulMetro, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(valor,
+                    style: const TextStyle(
+                        fontSize: 14, color: Colors.black87)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (carregando) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // sempre usa a mais atual (vinda do backend)
+    final obra = obraAtualizada ?? widget.obra;
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -19,6 +131,7 @@ class ObraDetalhe extends StatelessWidget {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
+
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -75,7 +188,7 @@ class ObraDetalhe extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // === STATUS E PROGRESSO ===
+                  // STATUS + PROGRESSO
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -112,15 +225,13 @@ class ObraDetalhe extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // === DESCRIÇÃO ===
-                  Text(
-                    "Descrição",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Cores.azulMetro,
-                    ),
-                  ),
+                  // DESCRIÇÃO
+                  Text("Descrição",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Cores.azulMetro,
+                      )),
                   const SizedBox(height: 6),
                   Text(
                     obra.descricao,
@@ -129,96 +240,70 @@ class ObraDetalhe extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // === INFORMAÇÕES ===
-                  Text(
-                    "Informações",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Cores.azulMetro,
-                    ),
-                  ),
+                  // INFORMAÇÕES
+                  Text("Informações",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Cores.azulMetro,
+                      )),
                   const SizedBox(height: 8),
                   _infoItem(Icons.location_on, "Localização", obra.localizacao),
                   _infoItem(Icons.engineering, "Responsável", obra.responsavel),
-                  _infoItem(
-                    Icons.calendar_today,
-                    "Início",
-                    _formatarData(obra.dataInicio),
-                  ),
+                  _infoItem(Icons.calendar_today, "Início",
+                      _formatarData(obra.dataInicio)),
                   if (obra.dataFim != null)
-                    _infoItem(
-                      Icons.flag,
-                      "Término",
-                      _formatarData(obra.dataFim!),
-                    ),
+                    _infoItem(Icons.flag, "Término",
+                        _formatarData(obra.dataFim!)),
 
                   const SizedBox(height: 40),
 
-                  // === BOTÕES DE FOTOS ===
-                  const SizedBox(height: 20),
-
+                  // BOTÕES DE FOTO
                   Center(
                     child: Column(
                       children: [
                         ElevatedButton.icon(
-                          icon: const Icon(
-                            Icons.add_a_photo,
-                            color: Colors.white,
-                          ),
-                          label: const Text(
-                            "Adicionar Fotos",
-                            style: TextStyle(color: Colors.white, fontSize: 16),
-                          ),
+                          icon: const Icon(Icons.add_a_photo, color: Colors.white),
+                          label: const Text("Adicionar Fotos",
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Cores.azulMetro,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 14,
-                            ),
+                                horizontal: 32, vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          onPressed: () {
-                            Navigator.push(
+                          onPressed: () async {
+                            await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => EnviarImagem(obraId: obra.id,),
+                                builder: (_) =>
+                                    EnviarImagem(obraId: obra.id),
                               ),
                             );
+                            _carregarObra(); // 🔥 ATUALIZA APÓS ANÁLISE
                           },
                         ),
 
                         const SizedBox(height: 12),
 
                         ElevatedButton.icon(
-                          icon: const Icon(
-                            Icons.photo_library_outlined,
-                            color: Colors.white,
-                          ),
-                          label: const Text(
-                            "Ver Fotos",
-                            style: TextStyle(color: Colors.white, fontSize: 16),
-                          ),
+                          icon: const Icon(Icons.photo_library_outlined,
+                              color: Colors.white),
+                          label: const Text("Ver Fotos",
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 14,
-                            ),
+                                horizontal: 32, vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EnviarImagem(obraId: obra.id,), // MUDAR PARA O HISTORICO DE FOTOS QUANDO TIVER
-                              ),
-                            );
-                          },
+                          onPressed: () {},
                         ),
                       ],
                     ),
@@ -226,23 +311,18 @@ class ObraDetalhe extends StatelessWidget {
 
                   const SizedBox(height: 40),
 
-                  // === BOTÃO DE EXCLUIR ===
+                  // EXCLUIR OBRA
                   Center(
                     child: ElevatedButton.icon(
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.white,
-                      ),
-                      label: const Text(
-                        "Excluir obra",
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
+                      icon: const Icon(Icons.delete_outline,
+                          color: Colors.white),
+                      label: const Text("Excluir obra",
+                          style:
+                              TextStyle(color: Colors.white, fontSize: 16)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.redAccent,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 14,
-                        ),
+                            horizontal: 32, vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -253,18 +333,18 @@ class ObraDetalhe extends StatelessWidget {
                           builder: (context) => AlertDialog(
                             title: const Text("Excluir obra"),
                             content: Text(
-                              "Tem certeza que deseja excluir '${obra.nome}'?",
-                            ),
+                                "Tem certeza que deseja excluir '${obra.nome}'?"),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(context, false),
+                                onPressed: () =>
+                                    Navigator.pop(context, false),
                                 child: const Text("Cancelar"),
                               ),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                                onPressed: () => Navigator.pop(context, true),
+                                    backgroundColor: Colors.redAccent),
+                                onPressed: () =>
+                                    Navigator.pop(context, true),
                                 child: const Text("Excluir"),
                               ),
                             ],
@@ -285,53 +365,5 @@ class ObraDetalhe extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Widget _infoItem(IconData icon, String titulo, String valor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Cores.azulMetro, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  valor,
-                  style: const TextStyle(fontSize: 14, color: Colors.black87),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatarData(DateTime data) {
-    return "${data.day.toString().padLeft(2, '0')}/"
-        "${data.month.toString().padLeft(2, '0')}/"
-        "${data.year}";
   }
 }

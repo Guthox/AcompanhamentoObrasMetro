@@ -178,6 +178,25 @@ async def enviar_ifc(
     return {"status": "ok", "msg": "IFC salvo com sucesso", "arquivo": destino}
 
 
+@app.get("/obra/{obra_id}")
+def get_obra(obra_id: int, db: Session = Depends(get_db)):
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    if not obra:
+        return {"erro": "Obra não encontrada"}
+    
+    return {
+        "id": obra.id,
+        "nome": obra.nome,
+        "descricao": obra.descricao,
+        "localizacao": obra.localizacao,
+        "responsavel": obra.responsavel,
+        "status": obra.status,
+        "data_inicio": obra.data_inicio.isoformat(),
+        "data_fim": obra.data_fim.isoformat() if obra.data_fim else None,
+        "progresso": obra.progresso
+    }
+
+
 
 @app.post("/analisar")
 async def analisar(
