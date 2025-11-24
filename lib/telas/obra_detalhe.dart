@@ -24,9 +24,6 @@ class _ObraDetalheState extends State<ObraDetalhe> {
     _carregarObra();
   }
 
-  // ======================================================
-  // 🔥 BUSCA A OBRA REAL NO BACKEND (PROGRESSO ATUALIZADO)
-  // ======================================================
   Future<void> _carregarObra() async {
     final url = Uri.parse("http://127.0.0.1:8000/obra/${widget.obra.id}");
 
@@ -283,7 +280,7 @@ class _ObraDetalheState extends State<ObraDetalhe> {
                                     EnviarImagem(obraId: obra.id),
                               ),
                             );
-                            _carregarObra(); // 🔥 ATUALIZA APÓS ANÁLISE
+                            _carregarObra(); 
                           },
                         ),
 
@@ -332,29 +329,35 @@ class _ObraDetalheState extends State<ObraDetalhe> {
                           context: context,
                           builder: (context) => AlertDialog(
                             title: const Text("Excluir obra"),
-                            content: Text(
-                                "Tem certeza que deseja excluir '${obra.nome}'?"),
+                            content: Text("Tem certeza que deseja excluir '${obra.nome}'?"),
                             actions: [
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, false),
+                                onPressed: () => Navigator.pop(context, false),
                                 child: const Text("Cancelar"),
                               ),
                               ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.redAccent),
-                                onPressed: () =>
-                                    Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                onPressed: () => Navigator.pop(context, true),
                                 child: const Text("Excluir"),
                               ),
                             ],
                           ),
                         );
 
-                        if (confirmar == true) {
+                        if (confirmar != true) return;
+
+                        final url = Uri.parse("http://127.0.0.1:8000/obras/${obra.id}");
+                        final resp = await http.delete(url);
+
+                        if (resp.statusCode == 200) {
                           Navigator.pop(context, 'deleted');
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Erro ao excluir obra no servidor")),
+                          );
                         }
-                      },
+                      }
+
                     ),
                   ),
                   const SizedBox(height: 20),

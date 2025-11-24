@@ -178,6 +178,43 @@ async def enviar_ifc(
     return {"status": "ok", "msg": "IFC salvo com sucesso", "arquivo": destino}
 
 
+@app.get("/obras")
+def listar_obras(db: Session = Depends(get_db)):
+    obras = db.query(ObraDB).all()
+    return [
+        {
+            "id": o.id,
+            "nome": o.nome,
+            "descricao": o.descricao,
+            "localizacao": o.localizacao,
+            "responsavel": o.responsavel,
+            "status": o.status,
+            "data_inicio": o.data_inicio.isoformat(),
+            "data_fim": o.data_fim.isoformat() if o.data_fim else None,
+            "progresso": o.progresso,
+        }
+        for o in obras
+    ]
+
+@app.delete("/obras/{obra_id}")
+def deletar_obra(obra_id: int, db: Session = Depends(get_db)):
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+
+    if not obra:
+        return {"erro": "Obra não encontrada"}
+
+    # Remove obra do banco
+    db.delete(obra)
+    db.commit()
+
+    # Apaga o IFC vinculado
+    caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc"
+    if os.path.exists(caminho_ifc):
+        os.remove(caminho_ifc)
+
+    return {"msg": "Obra excluída com sucesso"}
+
+
 @app.get("/obra/{obra_id}")
 def get_obra(obra_id: int, db: Session = Depends(get_db)):
     obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
