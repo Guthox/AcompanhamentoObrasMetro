@@ -5,6 +5,7 @@ ifc1.ifc
 ifc2.ifc
 ifc3.ifc
 ifc4.ifc
+backend/obras_ifc/*
 *.pt
 backend/resultados/*
 backend/__pycache__

@@ -99,6 +99,7 @@ class _ObraFormPageState extends State<ObraFormPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Center(child: Text("Cadastrar Obra")),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20),
         backgroundColor: Cores.azulMetro,
         iconTheme: const IconThemeData(color: Colors.white),
       ),

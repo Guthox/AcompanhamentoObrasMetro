@@ -119,7 +119,9 @@ class _EnviarImagemState extends State<EnviarImagem> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Enviar Foto da Obra"),
+        title: const Center(child: Text("Enviar foto da obra")),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20),
+        iconTheme: const IconThemeData(color: Colors.white),
         backgroundColor: Cores.azulMetro,
       ),
       body: Column(
@@ -169,8 +171,10 @@ class ResultadoAnalise extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Resultado da Análise"),
+        title: const Center(child: Text("Resultado da Análise")),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20),
         backgroundColor: Cores.azulMetro,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
         child: SingleChildScrollView(

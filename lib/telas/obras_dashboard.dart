@@ -38,6 +38,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
         title: const Center(child: Text('Obras')),
         titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20),
         backgroundColor: Cores.azulMetro,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(
         color: Colors.grey[100],
