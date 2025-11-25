@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import '../util/cores.dart';
@@ -8,7 +10,7 @@ class CadastroUsuarioTela extends StatefulWidget {
   
   static const String routeName = '/cadastro';
 
-  const CadastroUsuarioTela({Key? key}) : super(key: key);
+  const CadastroUsuarioTela({super.key});
 
   @override
   State<CadastroUsuarioTela> createState() => _CadastroUsuarioTelaState();

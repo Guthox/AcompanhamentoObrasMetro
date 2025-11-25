@@ -6,11 +6,11 @@ class Obras {
   final String descricao;
   final String localizacao;
   final String responsavel;
-  final String status;
+  String status;
   final DateTime dataInicio;
   final DateTime? dataFim;
   final String imagem;
-  final double progresso;
+  double progresso;
 
   final String? ifcPath;     // para Android/iOS/Desktop
   final Uint8List? ifcBytes; // para Web

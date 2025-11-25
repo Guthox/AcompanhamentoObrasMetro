@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/material.dart';
-import 'package:obras_view/telas/enviar_imagem.dart';
 import 'package:obras_view/telas/obras_dashboard.dart';
 import 'package:obras_view/util/cores.dart';
 import 'dart:convert';

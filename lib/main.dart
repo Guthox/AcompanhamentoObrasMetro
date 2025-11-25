@@ -4,7 +4,7 @@ import 'package:obras_view/telas/cadastro_usuario.dart';
 
 void main(){
   runApp(MaterialApp(
-    debugShowCheckedModeBanner: true, // Mudar para false para remover banner debug
+    debugShowCheckedModeBanner: false, // Mudar para false para remover banner debug
     initialRoute: '/login',
 
     //Mapa de rotas da aplicação
