@@ -39,7 +39,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   rxdart: ^0.28.0
   fluttertoast: ^9.0.0
-  image_picker: ^1.2.0
+  image_picker: ^1.2.1
+  http: ^1.6.0
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

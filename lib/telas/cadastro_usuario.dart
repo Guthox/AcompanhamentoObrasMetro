@@ -3,9 +3,9 @@ import '../util/cores.dart';
 
 class CadastroUsuarioTela extends StatefulWidget {
 
-  static const String routeName = '\cadastro';
+  static const String routeName = r'\cadastro';
 
-  const CadastroUsuarioTela({Key? key}) : super (key: key);
+  const CadastroUsuarioTela({super.key});
 
   @override
   State<CadastroUsuarioTela> createState() => _CadastroUsuarioTelaState();
@@ -33,8 +33,6 @@ class _CadastroUsuarioTelaState extends State<CadastroUsuarioTela>{
       String nome = _nomeController.text;
       String email = _emailController.text;
       String senha = _senhaController.text;
-
-      print('Simulando cadastro: Nome: $nome, Email: $email');
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cadastro enviado (simulação)!')),
