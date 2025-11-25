@@ -88,7 +88,7 @@ class _ObraFormContentState extends State<ObraFormContent> {
       final resposta = await request.send();
       return resposta.statusCode == 200;
     } catch (e) {
-      print("Erro upload: $e");
+      // print("Erro upload: $e");
       return false;
     }
   }

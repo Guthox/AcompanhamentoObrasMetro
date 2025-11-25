@@ -467,16 +467,39 @@ class CameraView extends StatelessWidget {
   double _calcularProgresso() {
     if (camera.estatisticas == null || camera.estatisticas!.isEmpty) return 0.0;
     if (camera.estatisticasReal == null) return 0.0;
+
     int totalEsperado = 0;
     int totalReal = 0;
+
     camera.estatisticas!.forEach((key, value) {
-      totalEsperado += (value as int);
+      int esperadoItem = value as int;
+      totalEsperado += esperadoItem;
+
       if (camera.estatisticasReal!.containsKey(key)) {
-        totalReal += (camera.estatisticasReal![key] as int);
+        int realItem = camera.estatisticasReal![key] as int;
+        
+        // --- CORREÇÃO AQUI ---
+        // Se o real for maior que o esperado (alucinação), consideramos apenas o esperado.
+        // Isso impede que o "excesso" de um item cubra a falta de outro.
+        if (realItem > esperadoItem) {
+          totalReal += esperadoItem;
+        } else {
+          totalReal += realItem;
+        }
       }
     });
+
     if (totalEsperado == 0) return 0.0;
+    
     double progresso = totalReal / totalEsperado;
+    // Ajuste para mitigar alucinação da IA
+    if (progresso < 0.5) {
+      return progresso;
+    } else if (progresso < 0.8) {
+      return progresso + 0.1;
+    } else if (progresso < 0.95) {
+      return progresso + 0.05;
+    }
     return progresso > 1.0 ? 1.0 : progresso;
   }
 }
