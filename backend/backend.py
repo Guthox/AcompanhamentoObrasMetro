@@ -106,17 +106,23 @@ def get_db():
     finally:
         db.close()
 
+# No arquivo backend.py
+
 def atualizar_progresso_obra(obra_id: int, db: Session):
     """Calcula a média do progresso das câmeras e salva na obra"""
     cameras = db.query(CameraDB).filter(CameraDB.obra_id == obra_id).all()
     
     if not cameras:
-        return # Sem câmeras, mantém o que tá (ou zera se preferir)
+        obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+        if obra:
+            obra.progresso = 0.0
+            db.commit()
+            print(f"Obra {obra_id}: Sem câmeras. Progresso zerado.")
+        return
 
     soma_progresso = sum([c.progresso for c in cameras])
     media = soma_progresso / len(cameras)
     
-    # Atualiza a obra
     obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
     if obra:
         obra.progresso = media
@@ -133,6 +139,8 @@ class LoginData(BaseModel):
     email: str
     senha: str
 
+# No backend.py
+
 class ObraCreate(BaseModel):
     id: int
     nome: str
@@ -140,8 +148,8 @@ class ObraCreate(BaseModel):
     localizacao: str
     responsavel: str
     status: str
-    data_inicio: str 
-    data_fim: str = None
+    data_inicio: Optional[str] = None 
+    data_fim: Optional[str] = None
 
 class CameraCreate(BaseModel):
     obra_id: int
@@ -567,6 +575,7 @@ def deletar_camera(camera_id: int, db: Session = Depends(get_db)):
     id_da_obra = cam.obra_id 
     db.delete(cam)
     db.commit()
+
     atualizar_progresso_obra(id_da_obra, db)
 
     return {"msg": "Câmera deletada"}

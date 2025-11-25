@@ -202,26 +202,12 @@ class VisaoGeral extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  
+                  Container(),
                   // === STATUS E BARRA DE PROGRESSO ===
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Chip(
-                        label: Text(
-                          statusData['texto'],
-                          style: TextStyle(
-                            color: statusData['cor'] == Colors.grey ? Colors.black87 : Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12
-                          ),
-                        ),
-                        backgroundColor: statusData['cor'],
-                        side: BorderSide.none,
-                        padding: const EdgeInsets.all(0),
-                      ),
                       Text(
                         '${(progressoReal * 100).toStringAsFixed(0)}%',
                         style: TextStyle(fontWeight: FontWeight.bold, color: Cores.azulMetro, fontSize: 16),

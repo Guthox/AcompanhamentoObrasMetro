@@ -86,8 +86,8 @@ class CameraView extends StatelessWidget {
                       Wrap(
                         spacing: 8,
                         children: [
-                          Chip(label: Text("Az: ${camera.anguloX}°")),
-                          Chip(label: Text("El: ${camera.anguloY}°")),
+                          Chip(label: Text("Azimute: ${camera.anguloX}°")),
+                          Chip(label: Text("Elevação: ${camera.anguloY}°")),
                           Chip(label: Text("Zoom: ${camera.zoom}x")),
                         ],
                       ),

@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:obras_view/telas/obra_detalhe.dart';
-import 'package:obras_view/telas/obra_form.dart'; // Certifique-se que este arquivo tem o ObraFormContent
+import 'package:obras_view/telas/obra_form.dart';
 import 'package:obras_view/util/cores.dart';
 import 'package:obras_view/util/obras.dart';
 
@@ -34,7 +34,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
     setState(() => carregando = true);
 
     try {
-      // Ajuste o IP se necessário (10.0.2.2 para emulador Android)
       final url = Uri.parse("http://127.0.0.1:8000/obras");
       final resp = await http.get(url);
 
@@ -111,39 +110,16 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text("Minhas Obras", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 10),
-            if (!carregando)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  "${obras.length}",
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              )
-          ],
-        ),
+        // Título centralizado e limpo, sem botão de refresh
+        title: const Center(child: Text("Obras", style: TextStyle(color: Colors.white))),
         backgroundColor: Cores.azulMetro,
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _carregarObras,
-            tooltip: "Recarregar",
-          )
-        ],
       ),
       body: Column(
         children: [
           // 1. BARRA DE PESQUISA
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), // Reduzi o padding inferior
             child: TextField(
               controller: _searchController,
               onChanged: _filtrarObras,
@@ -155,12 +131,10 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                 prefixIcon: const Icon(Icons.search, color: Colors.grey),
                 filled: true,
                 fillColor: Colors.white,
-                // Borda normal (cinza)
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey.shade300, width: 1.0),
                 ),
-                // Borda focada (azul)
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Cores.azulMetro, width: 2.0),
@@ -180,32 +154,54 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
             ),
           ),
 
-          // 2. GRID DE OBRAS
+          // 2. CONTADOR DE RESULTADOS (RESTAURADO)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Resultados: ${obrasFiltradas.length}", 
+                style: TextStyle(color: Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+          
+          // 3. GRID DE OBRAS
           Expanded(
             child: carregando
-                ? Center(child: CircularProgressIndicator(color: Cores.azulMetro))
-                : obrasFiltradas.isEmpty && _searchController.text.isNotEmpty
-                    ? _buildEmptyState()
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          mainAxisExtent: 280, // Altura Fixa
-                        ),
-                        itemCount: obrasFiltradas.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index < obrasFiltradas.length) {
-                            return _obraCard(context, obrasFiltradas[index]);
-                          } else {
-                            // O botão adicionar só aparece se não estiver buscando
-                            return _searchController.text.isEmpty
-                                ? _adicionarCard(context)
-                                : const SizedBox();
-                          }
-                        },
-                      ),
+              ? Center(child: CircularProgressIndicator(color: Cores.azulMetro))
+              : obrasFiltradas.isEmpty && _searchController.text.isNotEmpty
+                ? _buildEmptyState()
+                : GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      mainAxisExtent: 280,
+                    ),
+                    itemCount: obrasFiltradas.length + 1,
+                    itemBuilder: (context, index) {
+                      bool estaBuscando = _searchController.text.isNotEmpty;
+
+                      if (!estaBuscando) {
+                        if (index == 0) {
+                          return _adicionarCard(context);
+                        }
+                        int obraIndex = index - 1;
+                        if (obraIndex < obrasFiltradas.length) {
+                          return _obraCard(context, obrasFiltradas[obraIndex]);
+                        }
+                      } 
+                      
+                      else {
+                        if (index < obrasFiltradas.length) {
+                          return _obraCard(context, obrasFiltradas[index]);
+                        }
+                      }
+                      return const SizedBox();
+                    },
+                  ),
           ),
         ],
       ),
@@ -216,7 +212,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
   Widget _obraCard(BuildContext context, Obras obraCard) {
     bool temImagem = obraCard.imagem.isNotEmpty;
     
-    // Lógica de Prazo e Status
     int diasRestantes = 0;
     String textoPrazo = "Sem prazo";
     Color corPrazo = Colors.grey;
@@ -239,7 +234,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
         textoPrazo = "$diasRestantes dias restantes";
       }
 
-      // Cor do prazo baseada no andamento
       if (obraCard.progresso >= 1.0) {
          corPrazo = Colors.green; 
       } else if (diasRestantes < 0) {
@@ -250,9 +244,9 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
          if (progressoEsperado < 0.0) progressoEsperado = 0.0;
 
          if (obraCard.progresso < progressoEsperado) {
-           corPrazo = Colors.red; // Atrasado no cronograma
+           corPrazo = Colors.red;
          } else {
-           corPrazo = Colors.green; // Em dia
+           corPrazo = Colors.green;
          }
       }
     }
@@ -268,7 +262,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
             MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
           );
 
-          // Recarrega sempre ao voltar (para atualizar progresso ou remoção)
+          // Recarrega ao voltar
           await _carregarObras();
 
           if (resultado == 'deleted') {
@@ -291,7 +285,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. IMAGEM
               Expanded(
                 flex: 3,
                 child: ClipRRect(
@@ -308,8 +301,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                         ),
                 ),
               ),
-
-              // 2. INFORMAÇÕES
               Expanded(
                 flex: 2,
                 child: Padding(
@@ -318,7 +309,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Título e Status
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -344,10 +334,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                           ),
                         ],
                       ),
-                      
                       const SizedBox(height: 4),
-                      
-                      // Localização
                       Row(
                         children: [
                           const Icon(Icons.location_on, color: Colors.grey, size: 12),
@@ -362,10 +349,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 8),
-
-                      // Prazo
                       Row(
                         children: [
                           Icon(Icons.access_time, size: 12, color: corPrazo),
@@ -376,10 +360,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 6),
-
-                      // Barra de Progresso
                       Row(
                         children: [
                           Expanded(
@@ -413,7 +394,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
     );
   }
 
-  // --- CARD DE ADICIONAR (MODAL) ---
   Widget _adicionarCard(BuildContext context) {
     return _HoverScaleCard(
       onTap: () async {
@@ -424,13 +404,13 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
             return const Dialog(
               backgroundColor: Colors.transparent, 
               insetPadding: EdgeInsets.all(10),
-              child: ObraFormContent(), // Seu componente de formulário
+              child: ObraFormContent(),
             );
           },
         );
 
         if (novaObra != null) {
-          await _carregarObras(); // Recarrega do banco para ter certeza
+          await _carregarObras();
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -487,7 +467,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
   }
 }
 
-// --- WIDGET HOVER ---
 class _HoverScaleCard extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;

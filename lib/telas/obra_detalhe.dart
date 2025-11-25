@@ -86,7 +86,7 @@ class _ObraDetalheState extends State<ObraDetalhe> {
     }
   }
 
-  Future<void> _excluirCameraAtual() async {
+Future<void> _excluirCameraAtual() async {
     if (_cameraSelecionada == null) return;
     final confirmar = await showDialog<bool>(
       context: context,
@@ -95,7 +95,11 @@ class _ObraDetalheState extends State<ObraDetalhe> {
         content: Text("Tem certeza que deseja excluir '${_cameraSelecionada!.nome}'?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
-          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Cores.azulMetro), onPressed: () => Navigator.pop(context, true), child: const Text("Excluir", style: TextStyle(color: Colors.white))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Cores.azulMetro), 
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("Excluir", style: TextStyle(color: Colors.white))
+          ),
         ],
       ),
     );
@@ -110,13 +114,16 @@ class _ObraDetalheState extends State<ObraDetalhe> {
           _cameraSelecionada = null;
           _indiceSelecionado = 0;
         });
+
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Câmera excluída com sucesso.")));
+
+        await _recarregarDadosObra();
+
       } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao excluir."), backgroundColor: Colors.red));
       }
     }
   }
-
   Future<void> _adicionarImagemReal() async {
     if (_cameraSelecionada == null) return;
     try {
@@ -235,6 +242,20 @@ class _ObraDetalheState extends State<ObraDetalhe> {
       } finally {
         if (mounted) setState(() => _isProcessing = false);
       }
+    }
+  }
+
+  Future<void> _recarregarDadosObra() async {
+    try {
+      final response = await http.get(Uri.parse("$baseUrl/obra/${widget.obra.id}"));
+      if (response.statusCode == 200) {
+        final dados = jsonDecode(response.body);
+        setState(() {
+          widget.obra.progresso = (dados['progresso'] as num).toDouble();
+        });
+      }
+    } catch (e) {
+      print("Erro ao recarregar dados da obra: $e");
     }
   }
 
