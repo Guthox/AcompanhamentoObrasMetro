@@ -8,3 +8,4 @@ ifc4.ifc
 *.pt
 backend/resultados/*
 backend/__pycache__
+backend/obras_ifc/*
