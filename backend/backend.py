@@ -226,6 +226,20 @@ def gerar_render_ifc(caminho_ifc: str, caminho_saida: str, azimute: float, eleva
         if 'plotter' in locals():
             plotter.close()
         return False
+    
+def aplicar_boost_progresso(progresso: float) -> float:
+    if progresso <= 0.0: return 0.0
+    if progresso >= 1.0: return 1.0
+    
+    # Lógica de "boost" para compensar alucinação da IA
+    if progresso < 0.5:
+        return progresso
+    elif progresso < 0.8:
+        return min(1.0, progresso + 0.1)
+    elif progresso < 0.95:
+        return min(1.0, progresso + 0.05)
+    
+    return progresso
 
 # --- ROTAS ---
 
@@ -516,11 +530,14 @@ def salvar_camera(cam: CameraCreate, db: Session = Depends(get_db)):
         angulo_y=cam.angulo_y,
         zoom=cam.zoom,
         render_url=cam.render_url,
-        estatisticas=cam.estatisticas
+        estatisticas=cam.estatisticas,
+        progresso=0.0
     )
     db.add(nova_cam)
     db.commit()
     db.refresh(nova_cam)
+
+    atualizar_progresso_obra(cam.obra_id, db)
     return {"msg": "Câmera salva", "id": nova_cam.id}
 
 
@@ -545,12 +562,15 @@ def listar_cameras(obra_id: int, db: Session = Depends(get_db)):
 @app.delete("/cameras/{camera_id}")
 def deletar_camera(camera_id: int, db: Session = Depends(get_db)):
     cam = db.query(CameraDB).filter(CameraDB.id == camera_id).first()
-    if not cam: return {"erro": "Câmera não encontrada"}
+    
+    if not cam: 
+        return {"erro": "Câmera não encontrada"}
+    id_da_obra = cam.obra_id 
     db.delete(cam)
     db.commit()
-    atualizar_progresso_obra(obra_id, db)
-    return {"msg": "Câmera deletada"}
+    atualizar_progresso_obra(id_da_obra, db)
 
+    return {"msg": "Câmera deletada"},
 @app.post("/analisar_foto_real_camera")
 async def analisar_foto_real_camera(
     camera_id: int = Form(...),
@@ -584,26 +604,28 @@ async def analisar_foto_real_camera(
     if cam:
         cam.estatisticas_real = estatisticas_real
         cam.render_real_anotado_url = url_anotada
+        
         if cam.estatisticas:
             total_esperado = sum(cam.estatisticas.values())
             total_real = 0
             for key, qtd_esperada in cam.estatisticas.items():
                 qtd_real = estatisticas_real.get(key, 0)
-                # Evita que excesso de um item compense a falta de outro
                 total_real += min(qtd_real, qtd_esperada)
             
+            progresso_bruto = 0.0
             if total_esperado > 0:
-                cam.progresso = total_real / total_esperado
-            else:
-                cam.progresso = 0.0
+                progresso_bruto = total_real / total_esperado
+            
+            cam.progresso = aplicar_boost_progresso(progresso_bruto)
+            
         db.commit()
-
         atualizar_progresso_obra(cam.obra_id, db)
 
     return {
         "status": "ok",
         "estatisticas_real": estatisticas_real,
-        "imagem_anotada_url": url_anotada
+        "imagem_anotada_url": url_anotada,
+        "progresso_calculado": cam.progresso
     }
 
 

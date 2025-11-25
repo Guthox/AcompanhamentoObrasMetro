@@ -1,7 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // Para kIsWeb
 import 'package:flutter/material.dart';
 import 'package:obras_view/util/cameras.dart';
 import 'package:obras_view/util/cores.dart';
@@ -13,7 +13,7 @@ class CameraView extends StatelessWidget {
   final double opacidadeOverlay;
   final bool mostrarAnotacoesIA;
 
-  // Callbacks para ações
+  // Callbacks para ações vindas do pai
   final Function(double) onOpacidadeChanged;
   final Function(bool) onMostrarIAChanged;
   final VoidCallback onAdicionarFoto;
@@ -34,18 +34,17 @@ class CameraView extends StatelessWidget {
   Widget build(BuildContext context) {
     final larguraTela = MediaQuery.of(context).size.width;
 
-    // Lógica para buscar imagem real
+    // 1. Busca a imagem real local correspondente (para o modo "limpo")
     final imagemReal = Info.listaImagens.lastWhere(
       (img) => img.cameraId == camera.id,
       orElse: () => Imagens(localPath: '', cameraId: -1),
     );
-    final temImagemReal =
-        imagemReal.cameraId != -1 && imagemReal.localPath.isNotEmpty;
-    final temAnotacaoIA =
-        camera.renderRealAnotadoUrl != null &&
-        camera.renderRealAnotadoUrl!.isNotEmpty;
+    
+    // Verifica se tem imagem real e se tem anotação da IA vinda do backend
+    final temImagemReal = imagemReal.cameraId != -1 && imagemReal.localPath.isNotEmpty;
+    final temAnotacaoIA = camera.renderRealAnotadoUrl != null && camera.renderRealAnotadoUrl!.isNotEmpty;
 
-    // Cálculo do Progresso
+    // 2. Calcula o progresso com a lógica corrigida (sem excedentes) + boost
     double progresso = _calcularProgresso();
     String porcentagemTexto = (progresso * 100).toStringAsFixed(0);
 
@@ -56,7 +55,7 @@ class CameraView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CABEÇALHO
+            // --- CABEÇALHO ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,10 +78,7 @@ class CameraView extends StatelessWidget {
                           const SizedBox(width: 10),
                           IconButton(
                             onPressed: onExcluirCamera,
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
-                            ),
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                             tooltip: "Excluir Câmera",
                           ),
                         ],
@@ -90,27 +86,19 @@ class CameraView extends StatelessWidget {
                       Wrap(
                         spacing: 8,
                         children: [
-                          Chip(label: Text("Azimute: ${camera.anguloX}°")),
-                          Chip(label: Text("Elevação: ${camera.anguloY}°")),
+                          Chip(label: Text("Az: ${camera.anguloX}°")),
+                          Chip(label: Text("El: ${camera.anguloY}°")),
                           Chip(label: Text("Zoom: ${camera.zoom}x")),
                         ],
                       ),
                       const SizedBox(height: 10),
                       ElevatedButton.icon(
                         onPressed: onAdicionarFoto,
-                        icon: const Icon(
-                          Icons.add_photo_alternate,
-                          color: Colors.white,
-                        ),
-                        label: const Text(
-                          "Adicionar Foto",
-                          style: TextStyle(color: Colors.white),
-                        ),
+                        icon: const Icon(Icons.add_photo_alternate, color: Colors.white),
+                        label: const Text("Adicionar Foto", style: TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Cores.azulMetro,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ],
@@ -120,12 +108,12 @@ class CameraView extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // ÁREA VISUAL
+            // --- ÁREA VISUAL (STACK DE IMAGENS) ---
             LayoutBuilder(
               builder: (context, constraints) {
-                double alturaImagem = constraints.maxWidth < 400
-                    ? constraints.maxWidth
-                    : 400;
+                // Altura responsiva (trava em 400px se a tela for grande)
+                double alturaImagem = constraints.maxWidth < 400 ? constraints.maxWidth : 400;
+                
                 return Column(
                   children: [
                     Container(
@@ -141,49 +129,40 @@ class CameraView extends StatelessWidget {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
+                            // CAMADA 1: RENDER 3D
                             if (camera.renderUrl != null)
                               Image.network(
                                 camera.renderUrl!,
                                 fit: BoxFit.contain,
-                                errorBuilder: (ctx, err, stack) => const Center(
-                                  child: Icon(Icons.broken_image),
-                                ),
+                                errorBuilder: (ctx, err, stack) => const Center(child: Icon(Icons.broken_image)),
                               )
                             else
                               const Center(child: Text("Sem render 3D")),
 
+                            // CAMADA 2: FOTO REAL (Overlay)
                             if (temImagemReal)
                               Opacity(
                                 opacity: opacidadeOverlay,
                                 child: Builder(
                                   builder: (context) {
+                                    // Se Switch ativado e tem URL anotada -> Mostra imagem IA
                                     if (mostrarAnotacoesIA && temAnotacaoIA) {
                                       return Image.network(
                                         camera.renderRealAnotadoUrl!,
                                         fit: BoxFit.contain,
-                                        loadingBuilder: (ctx, child, p) =>
-                                            p == null
-                                            ? child
-                                            : const Center(
-                                                child:
-                                                    CircularProgressIndicator(),
-                                              ),
+                                        loadingBuilder: (ctx, child, p) => p == null ? child : const Center(child: CircularProgressIndicator()),
                                       );
                                     }
+                                    // Senão, mostra foto limpa (Web ou File)
                                     if (kIsWeb) {
-                                      return Image.network(
-                                        imagemReal.localPath,
-                                        fit: BoxFit.contain,
-                                      );
+                                      return Image.network(imagemReal.localPath, fit: BoxFit.contain);
                                     }
-                                    return Image.file(
-                                      File(imagemReal.localPath),
-                                      fit: BoxFit.contain,
-                                    );
+                                    return Image.file(File(imagemReal.localPath), fit: BoxFit.contain);
                                   },
                                 ),
                               ),
 
+                            // Aviso se não tiver foto
                             if (!temImagemReal)
                               Positioned(
                                 bottom: 10,
@@ -194,13 +173,7 @@ class CameraView extends StatelessWidget {
                                     color: Colors.black54,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: const Text(
-                                    "Adicione foto real",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                    ),
-                                  ),
+                                  child: const Text("Adicione foto real", style: TextStyle(color: Colors.white, fontSize: 10)),
                                 ),
                               ),
                           ],
@@ -208,24 +181,16 @@ class CameraView extends StatelessWidget {
                       ),
                     ),
 
-                    // CONTROLES
+                    // CONTROLES (Slider e Switch)
                     if (temImagemReal)
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                          horizontal: 20,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
                         child: Column(
                           children: [
+                            // Slider Opacidade
                             Row(
                               children: [
-                                const Text(
-                                  "Render",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey,
-                                  ),
-                                ),
+                                const Text("Render", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                                 Expanded(
                                   child: Slider(
                                     value: opacidadeOverlay,
@@ -236,48 +201,28 @@ class CameraView extends StatelessWidget {
                                     onChanged: onOpacidadeChanged,
                                   ),
                                 ),
-                                const Text(
-                                  "Foto Real",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Cores.azulMetro,
-                                  ),
-                                ),
+                                const Text("Foto Real", style: TextStyle(fontWeight: FontWeight.bold, color: Cores.azulMetro)),
                               ],
                             ),
+                            
+                            // Switch Máscaras IA
                             if (temAnotacaoIA)
                               Container(
                                 margin: const EdgeInsets.only(top: 5),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
                                   color: Cores.azulMetro.withOpacity(0.05),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Cores.azulMetro.withOpacity(0.2),
-                                  ),
+                                  border: Border.all(color: Cores.azulMetro.withOpacity(0.2)),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Row(
                                       children: [
-                                        Icon(
-                                          Icons.auto_awesome,
-                                          size: 18,
-                                          color: Cores.azulMetro,
-                                        ),
+                                        Icon(Icons.auto_awesome, size: 18, color: Cores.azulMetro),
                                         const SizedBox(width: 8),
-                                        const Text(
-                                          "Máscaras IA",
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13,
-                                          ),
-                                        ),
+                                        const Text("Máscaras IA", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                       ],
                                     ),
                                     Switch(
@@ -298,14 +243,11 @@ class CameraView extends StatelessWidget {
 
             const SizedBox(height: 30),
 
-            // BARRA DE PROGRESSO
+            // --- BARRA DE PROGRESSO ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  "Progresso",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                const Text("Progresso", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Text(
                   "$porcentagemTexto%",
                   style: TextStyle(
@@ -330,25 +272,16 @@ class CameraView extends StatelessWidget {
             ),
 
             const SizedBox(height: 20),
-            const Text(
-              "Componentes",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text("Componentes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
 
-            // GRID DE ESTATÍSTICAS
+            // --- GRID DE ESTATÍSTICAS ---
             if (camera.estatisticas != null && camera.estatisticas!.isNotEmpty)
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: larguraTela > 860
-                      ? 4
-                      : larguraTela > 680
-                      ? 3
-                      : larguraTela > 350
-                      ? 2
-                      : 1,
+                  crossAxisCount: larguraTela > 860 ? 4 : larguraTela > 680 ? 3 : larguraTela > 350 ? 2 : 1,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                   mainAxisExtent: 80,
@@ -356,9 +289,9 @@ class CameraView extends StatelessWidget {
                 itemCount: camera.estatisticas!.length,
                 itemBuilder: (context, index) {
                   final entry = camera.estatisticas!.entries.elementAt(index);
+                  
                   int real = 0;
-                  if (camera.estatisticasReal != null &&
-                      camera.estatisticasReal!.containsKey(entry.key)) {
+                  if (camera.estatisticasReal != null && camera.estatisticasReal!.containsKey(entry.key)) {
                     real = camera.estatisticasReal![entry.key];
                   }
                   int esperado = entry.value;
@@ -370,17 +303,11 @@ class CameraView extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: completo
-                            ? Colors.green.withOpacity(0.5)
-                            : Cores.azulMetro.withOpacity(0.5),
+                        color: completo ? Colors.green.withOpacity(0.5) : Cores.azulMetro.withOpacity(0.5),
                         width: 2,
                       ),
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
+                        BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2)),
                       ],
                     ),
                     child: Row(
@@ -398,45 +325,24 @@ class CameraView extends StatelessWidget {
                             children: [
                               Text(
                                 entry.key.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey,
-                                ),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               RichText(
                                 text: TextSpan(
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blueGrey,
-                                  ),
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey),
                                   children: [
                                     TextSpan(
                                       text: "$esperado",
-                                      style: TextStyle(
-                                        color: completo
-                                            ? Colors.green
-                                            : Cores.azulMetro,
-                                      ),
+                                      style: TextStyle(color: completo ? Colors.green : Cores.azulMetro),
                                     ),
                                     const TextSpan(
                                       text: " / ",
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 14,
-                                      ),
+                                      style: TextStyle(color: Colors.grey, fontSize: 14),
                                     ),
                                     TextSpan(
-                                      text: real > esperado
-                                          ? "$esperado"
-                                          : "$real",
-                                      style: TextStyle(
-                                        color: completo
-                                            ? Colors.green
-                                            : Colors.blueGrey,
-                                      ),
+                                      text: real > esperado ? "$esperado" : "$real",
+                                      style: TextStyle(color: completo ? Colors.green : Colors.blueGrey),
                                     ),
                                   ],
                                 ),
@@ -450,12 +356,7 @@ class CameraView extends StatelessWidget {
                 },
               )
             else
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text("Sem dados."),
-                ),
-              ),
+              const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Sem dados."))),
 
             const SizedBox(height: 40),
           ],
@@ -464,6 +365,7 @@ class CameraView extends StatelessWidget {
     );
   }
 
+  // --- LÓGICA DE CÁLCULO DE PROGRESSO ---
   double _calcularProgresso() {
     if (camera.estatisticas == null || camera.estatisticas!.isEmpty) return 0.0;
     if (camera.estatisticasReal == null) return 0.0;
@@ -477,10 +379,6 @@ class CameraView extends StatelessWidget {
 
       if (camera.estatisticasReal!.containsKey(key)) {
         int realItem = camera.estatisticasReal![key] as int;
-        
-        // --- CORREÇÃO AQUI ---
-        // Se o real for maior que o esperado (alucinação), consideramos apenas o esperado.
-        // Isso impede que o "excesso" de um item cubra a falta de outro.
         if (realItem > esperadoItem) {
           totalReal += esperadoItem;
         } else {
@@ -492,7 +390,8 @@ class CameraView extends StatelessWidget {
     if (totalEsperado == 0) return 0.0;
     
     double progresso = totalReal / totalEsperado;
-    // Ajuste para mitigar alucinação da IA
+
+    // LÓGICA DE BOOST (Suavização para mitigar falhas da IA)
     if (progresso < 0.5) {
       return progresso;
     } else if (progresso < 0.8) {

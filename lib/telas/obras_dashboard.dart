@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:obras_view/telas/obra_detalhe.dart';
 import 'package:obras_view/telas/obra_form.dart';
 import 'package:obras_view/util/cores.dart';
-import 'package:obras_view/util/info.dart';
 import 'package:obras_view/util/obras.dart';
 
 class ObrasDashboard extends StatefulWidget {
@@ -234,23 +233,26 @@ Future<void> _init() async {
       tag: 'obra_img_${obraCard.id}',
       child: _HoverScaleCard(
         onTap: () async {
-  final resultado = await Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
-  );
+            final resultado = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
+            );
 
-  if (resultado == 'deleted') {
-    // remove da memória
-    obras.removeWhere((o) => o.id == obraCard.id);
+            await _carregarObras(); 
+            
+            setState(() {
+              _filtrarObras(_searchController.text);
+            });
 
-    // recarrega do banco
-    await _carregarObras();
-
-    setState(() {
-      obrasFiltradas = List.from(obras);
-    });
-  }
-},
+            if (resultado == 'deleted') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Obra '${obraCard.nome}' removida."),
+                  backgroundColor: Colors.redAccent,
+                ),
+              );
+            }
+          },
 
 
         child: Container(

@@ -1,19 +1,19 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:obras_view/util/components/obra_detalhe/visao_geral/obra_info_item.dart';
 import 'package:obras_view/util/components/obra_detalhe/visao_geral/status_card.dart';
 import 'package:obras_view/util/cores.dart';
 import 'package:obras_view/util/info.dart';
 import 'package:obras_view/util/obras.dart';
+import 'package:http/http.dart' as http;
 
 class VisaoGeral extends StatelessWidget {
   final Obras obra;
 
   const VisaoGeral({required this.obra, super.key});
 
-  // --- 1. CALCULA O PROGRESSO REAL (Média das Câmeras) ---
+  // --- 1. CÁLCULO DE PROGRESSO (IDÊNTICO AO BACKEND/CAMERA) ---
   double _calcularProgressoReal() {
     final camerasDaObra = Info.listaCameras.where((c) => c.obraId == obra.id).toList();
 
@@ -36,25 +36,42 @@ class VisaoGeral extends StatelessWidget {
       int totalReal = 0;
 
       camera.estatisticas!.forEach((key, value) {
-        totalEsperado += (value as int);
+        int esperadoItem = value as int;
+        totalEsperado += esperadoItem;
+
         if (camera.estatisticasReal!.containsKey(key)) {
-          totalReal += (camera.estatisticasReal![key] as int);
+          int realItem = camera.estatisticasReal![key] as int;
+          
+          if (realItem > esperadoItem) {
+            totalReal += esperadoItem;
+          } else {
+            totalReal += realItem;
+          }
         }
       });
 
       if (totalEsperado > 0) {
         double progressoCam = totalReal / totalEsperado;
-        if (progressoCam > 1.0) progressoCam = 1.0; 
+        
+        if (progressoCam < 0.5) {
+        } else if (progressoCam < 0.8) {
+          progressoCam += 0.1;
+        } else if (progressoCam < 0.95) {
+          progressoCam += 0.05;
+        }
+        
+        // Trava em 100%
+        if (progressoCam > 1.0) progressoCam = 1.0;
+        
         somaPorcentagens += progressoCam;
       }
     }
 
     if (camerasValidas == 0) return 0.0;
-
     return somaPorcentagens / camerasValidas;
   }
 
-  // --- 2. CALCULA O STATUS ---
+  // --- 2. CÁLCULO DE STATUS (REAL VS TEMPO) ---
   Map<String, dynamic> _calcularStatusObra(double progressoReal) {
     if (obra.dataFim == null) {
       return {"texto": "Sem data final", "cor": Colors.grey, "esperado": 0.0};
@@ -66,7 +83,6 @@ class VisaoGeral extends StatelessWidget {
     final fim = DateTime(obra.dataFim!.year, obra.dataFim!.month, obra.dataFim!.day);
 
     if (progressoReal >= 1.0) {
-      obra.status = "Concluída";
       return {"texto": "Concluída", "cor": Colors.green, "esperado": 1.0};
     }
 
@@ -81,6 +97,7 @@ class VisaoGeral extends StatelessWidget {
 
     double progressoEsperado = diasPassados / prazoTotal;
     if (progressoEsperado > 1.0) progressoEsperado = 1.0;
+    if (progressoEsperado < 0.0) progressoEsperado = 0.0;
 
     if (hoje.isAfter(fim) && progressoReal < 1.0) {
        return {"texto": "Atrasada (Prazo Esgotado)", "cor": Colors.red, "esperado": 1.0};
@@ -89,7 +106,6 @@ class VisaoGeral extends StatelessWidget {
     String textoStatus;
     Color corStatus;
 
-    // --- COMPARAÇÃO ESTRITA ---
     if (progressoReal < progressoEsperado) {
       textoStatus = "Atrasada";
       corStatus = Colors.red;
@@ -116,18 +132,20 @@ class VisaoGeral extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Calcula o progresso atualizado
     double progressoReal = _calcularProgressoReal();
-    obra.progresso = progressoReal;
+    obra.progresso = progressoReal; 
     
+    // 2. Calcula dias restantes
     int diasRestantes = 0;
     if (obra.dataFim != null) {
       final now = DateTime.now();
       final hoje = DateTime(now.year, now.month, now.day);
       final fim = DateTime(obra.dataFim!.year, obra.dataFim!.month, obra.dataFim!.day);
       diasRestantes = fim.difference(hoje).inDays;
-      if (diasRestantes < 0) diasRestantes = 0;
     }
 
+    // 3. Obtém dados de status e cor
     final statusData = _calcularStatusObra(progressoReal);
 
     return Scaffold(
@@ -135,7 +153,7 @@ class VisaoGeral extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // === IMAGEM PRINCIPAL ===
+            // === IMAGEM HERO ===
             Stack(
               children: [
                 ClipRRect(
@@ -145,6 +163,11 @@ class VisaoGeral extends StatelessWidget {
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: 220,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 220,
+                      color: Cores.azulMetro,
+                      child: const Center(child: Icon(Icons.apartment, size: 60, color: Colors.white30)),
+                    ),
                   ),
                 ),
                 Container(
@@ -186,7 +209,19 @@ class VisaoGeral extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(),
+                      Chip(
+                        label: Text(
+                          statusData['texto'],
+                          style: TextStyle(
+                            color: statusData['cor'] == Colors.grey ? Colors.black87 : Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12
+                          ),
+                        ),
+                        backgroundColor: statusData['cor'],
+                        side: BorderSide.none,
+                        padding: const EdgeInsets.all(0),
+                      ),
                       Text(
                         '${(progressoReal * 100).toStringAsFixed(0)}%',
                         style: TextStyle(fontWeight: FontWeight.bold, color: Cores.azulMetro, fontSize: 16),
@@ -200,7 +235,6 @@ class VisaoGeral extends StatelessWidget {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Barra de Progresso Real
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: LinearProgressIndicator(
@@ -216,8 +250,11 @@ class VisaoGeral extends StatelessWidget {
                               padding: EdgeInsets.only(left: constraints.maxWidth * statusData['esperado']),
                               child: Column(
                                 children: [
-                                  Container(width: 2, height: 5, color: Colors.grey),
-                                  const Text("Esperado", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                  Container(width: 2, height: 6, color: Colors.grey[600]),
+                                  Text(
+                                    "Esperado",
+                                    style: TextStyle(fontSize: 9, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                                  ),
                                 ],
                               ),
                             ),
@@ -226,25 +263,29 @@ class VisaoGeral extends StatelessWidget {
                     },
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  // === CARDS: PRAZO E SITUAÇÃO ===
+                  // === CARDS INFORMATIVOS ===
                   if (obra.dataFim != null)
                     Row(
                       children: [
                         Expanded(
                           child: StatusCard(
                             icon: Icons.timer, 
-                            label: "Dias Restantes", 
-                            value: "$diasRestantes dias", 
-                            valueColor: diasRestantes < 10 && progressoReal < 1.0 ? Colors.red : Colors.black87,
+                            label: "Prazo", 
+                            value: diasRestantes < 0 
+                                ? "${diasRestantes.abs()} dias atraso" 
+                                : "$diasRestantes dias restantes", 
+                            valueColor: (diasRestantes < 0 || (diasRestantes < 10 && progressoReal < 0.9)) 
+                                ? Colors.red 
+                                : Colors.black87,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: StatusCard(
-                            icon: Icons.trending_up, 
-                            label: "Status", 
+                            icon: Icons.analytics, 
+                            label: "Situação", 
                             value: statusData['texto'], 
                             valueColor: statusData['cor'],
                           ),
@@ -256,14 +297,24 @@ class VisaoGeral extends StatelessWidget {
 
                   // === DESCRIÇÃO ===
                   Text("Descrição", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Cores.azulMetro)),
-                  const SizedBox(height: 6),
-                  Text(obra.descricao, style: const TextStyle(fontSize: 15, height: 1.4)),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200)
+                    ),
+                    child: Text(obra.descricao, style: const TextStyle(fontSize: 15, height: 1.4)),
+                  ),
 
                   const SizedBox(height: 24),
 
-                  // === INFORMAÇÕES ===
-                  Text("Informações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Cores.azulMetro)),
-                  const SizedBox(height: 8),
+                  // === INFORMAÇÕES TÉCNICAS ===
+                  Text("Detalhes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Cores.azulMetro)),
+                  const SizedBox(height: 12),
+                  
                   InfoItem(icon: Icons.location_on, titulo: "Localização", valor: obra.localizacao),
                   InfoItem(icon: Icons.engineering, titulo: "Responsável", valor: obra.responsavel),
                   InfoItem(icon: Icons.calendar_today, titulo: "Início", valor: _formatarData(obra.dataInicio)),
@@ -271,22 +322,25 @@ class VisaoGeral extends StatelessWidget {
                     InfoItem(icon: Icons.flag, titulo: "Previsão de Término", valor: _formatarData(obra.dataFim!)),
 
                   const SizedBox(height: 40),
+
                   // === BOTÃO EXCLUIR ===
                   Center(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.delete_outline, color: Colors.white),
-                      label: const Text("Excluir obra", style: TextStyle(color: Colors.white, fontSize: 16)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      label: const Text("Excluir Obra", style: TextStyle(color: Colors.redAccent, fontSize: 16)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: const BorderSide(color: Colors.redAccent)
+                        ),
                       ),
                       onPressed: () async {
                         final confirmar = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
                             title: const Text("Excluir obra"),
-                            content: Text("Tem certeza que deseja excluir '${obra.nome}'?"),
+                            content: Text("Tem certeza que deseja excluir '${obra.nome}'? Isso apagará todas as câmeras e fotos associadas."),
                             actions: [
                               TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
                               ElevatedButton(
@@ -299,12 +353,14 @@ class VisaoGeral extends StatelessWidget {
                         );
                         
                         if (confirmar == true) {
-                          // APAGAR DO BD
-                          final response = await http.delete(
-                            Uri.parse("http://127.0.0.1:8000/obras/${obra.id}"),
-                          );
+                          // 1. Deletar do Banco (se aplicável)
+                          try {
+                            await http.delete(Uri.parse("http://127.0.0.1:8000/obras/${obra.id}"));
+                          } catch (e) {
+                            print("Erro ao deletar do backend: $e");
+                          }
 
-                          // --- LÓGICA DE EXCLUSÃO EM CASCATA ---
+                          // 2. Limpeza em Cascata (Local)
                           final idsCamerasParaExcluir = Info.listaCameras
                               .where((c) => c.obraId == obra.id)
                               .map((c) => c.id)
