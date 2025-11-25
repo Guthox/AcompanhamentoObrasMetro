@@ -1,6 +1,9 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:obras_view/telas/obra_detalhe.dart';
 import 'package:obras_view/telas/obra_form.dart';
 import 'package:obras_view/util/cores.dart';
@@ -15,23 +18,68 @@ class ObrasDashboard extends StatefulWidget {
 }
 
 class _ObrasDashboardState extends State<ObrasDashboard> {
-  List<Obras> todasObras = Info.listaObras;
+
+  List<Obras> obras = [];
+  bool carregando = true;
+
+
+Future<void> _carregarObras() async {
+  carregando = true;
+
+  final url = Uri.parse("http://127.0.0.1:8000/obras");
+  final resp = await http.get(url);
+
+  if (resp.statusCode == 200) {
+    final lista = jsonDecode(resp.body);
+
+    obras = lista.map<Obras>((o) {
+      return Obras(
+        id: o["id"],
+        nome: o["nome"],
+        descricao: o["descricao"],
+        localizacao: o["localizacao"],
+        responsavel: o["responsavel"],
+        status: o["status"],
+        dataInicio: DateTime.parse(o["data_inicio"]),
+        dataFim: o["data_fim"] != null ? DateTime.parse(o["data_fim"]) : null,
+        progresso: (o["progresso"] ?? 0.0).toDouble(),
+        imagem: "assets/metro-sp-logo.png",
+        ifcName: "",
+        ifcPath: "",
+        ifcBytes: null,
+      );
+    }).toList();
+  }
+
+  carregando = false;
+}
+
+
+  
   List<Obras> obrasFiltradas = [];
   
   final TextEditingController _searchController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    obrasFiltradas = List.from(todasObras);
-  }
+ @override
+void initState() {
+  super.initState();
+  _init();
+}
+
+Future<void> _init() async {
+  await _carregarObras();   // Espera carregar as obras
+  setState(() {
+    obrasFiltradas = List.from(obras);
+  });
+}
+
 
   void _filtrarObras(String query) {
     setState(() {
       if (query.isEmpty) {
-        obrasFiltradas = List.from(todasObras);
+        obrasFiltradas = List.from(obras);
       } else {
-        obrasFiltradas = todasObras.where((obra) {
+        obrasFiltradas = obras.where((obra) {
           final nome = (obra.nome).toLowerCase();
           final local = (obra.localizacao).toLowerCase();
           final q = query.toLowerCase();
@@ -186,17 +234,25 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
       tag: 'obra_img_${obraCard.id}',
       child: _HoverScaleCard(
         onTap: () async {
-          final resultado = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
-          );
-          if (resultado == 'deleted') {
-            setState(() {
-              todasObras.remove(obraCard);
-              obrasFiltradas = List.from(todasObras);
-            });
-          }
-        },
+  final resultado = await Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
+  );
+
+  if (resultado == 'deleted') {
+    // remove da memória
+    obras.removeWhere((o) => o.id == obraCard.id);
+
+    // recarrega do banco
+    await _carregarObras();
+
+    setState(() {
+      obrasFiltradas = List.from(obras);
+    });
+  }
+},
+
+
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -352,7 +408,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
         // Se retornou uma obra (salvou com sucesso)
         if (novaObra != null) {
           setState(() {
-            todasObras.add(novaObra);
+            obras.add(novaObra);
             _filtrarObras(_searchController.text); // Atualiza a lista visual
           });
           

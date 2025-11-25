@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:obras_view/util/components/obra_detalhe/visao_geral/obra_info_item.dart';
 import 'package:obras_view/util/components/obra_detalhe/visao_geral/status_card.dart';
 import 'package:obras_view/util/cores.dart';
@@ -298,6 +299,11 @@ class VisaoGeral extends StatelessWidget {
                         );
                         
                         if (confirmar == true) {
+                          // APAGAR DO BD
+                          final response = await http.delete(
+                            Uri.parse("http://127.0.0.1:8000/obras/${obra.id}"),
+                          );
+
                           // --- LÓGICA DE EXCLUSÃO EM CASCATA ---
                           final idsCamerasParaExcluir = Info.listaCameras
                               .where((c) => c.obraId == obra.id)
