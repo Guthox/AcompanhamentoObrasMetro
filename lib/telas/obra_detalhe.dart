@@ -29,7 +29,7 @@ class _ObraDetalheState extends State<ObraDetalhe> {
   // Estado
   int _indiceSelecionado = 0;
   Cameras? _cameraSelecionada;
-  List<Cameras> listaCameras = Info.listaCameras;
+  List<Cameras> listaCameras = [];
   bool _isProcessing = false;
   double _opacidadeOverlay = 0.5;
   bool _mostrarAnotacoesIA = false;
@@ -43,6 +43,12 @@ class _ObraDetalheState extends State<ObraDetalhe> {
   final String baseUrl = "http://127.0.0.1:8000";
 
   @override
+  void initState() {
+    super.initState();
+    _carregarCamerasDoBanco(); // [NOVO] Carrega ao iniciar
+  }
+
+  @override
   void dispose() {
     _angXController.dispose();
     _angYController.dispose();
@@ -52,6 +58,33 @@ class _ObraDetalheState extends State<ObraDetalhe> {
   }
 
   // --- LÓGICA DE NEGÓCIO ---
+
+  Future<void> _carregarCamerasDoBanco() async {
+    try {
+      final response = await http.get(Uri.parse("$baseUrl/cameras/${widget.obra.id}"));
+      if (response.statusCode == 200) {
+        final List<dynamic> dados = jsonDecode(response.body);
+        setState(() {
+          listaCameras = dados.map((json) => Cameras(
+            id: json['id'],
+            obraId: widget.obra.id,
+            nome: json['nome'],
+            anguloX: (json['angulo_x'] as num).toDouble(),
+            anguloY: (json['angulo_y'] as num).toDouble(),
+            zoom: (json['zoom'] as num).toDouble(),
+            renderUrl: json['render_url'],
+            estatisticas: json['estatisticas'],
+            estatisticasReal: json['estatisticas_real'],
+            renderRealAnotadoUrl: json['render_real_anotado_url'],
+          )).toList();
+          // Atualiza a lista global do Info para o VisaoGeral usar
+          Info.listaCameras = listaCameras; 
+        });
+      }
+    } catch (e) {
+      print("Erro ao carregar câmeras: $e");
+    }
+  }
 
   Future<void> _excluirCameraAtual() async {
     if (_cameraSelecionada == null) return;
@@ -68,13 +101,19 @@ class _ObraDetalheState extends State<ObraDetalhe> {
     );
 
     if (confirmar == true) {
-      setState(() {
-        Info.listaImagens.removeWhere((img) => img.cameraId == _cameraSelecionada!.id);
-        Info.listaCameras.removeWhere((c) => c.id == _cameraSelecionada!.id);
-        _cameraSelecionada = null;
-        _indiceSelecionado = 0;
-      });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Câmera excluída com sucesso.")));
+      try {
+        await http.delete(Uri.parse("$baseUrl/cameras/${_cameraSelecionada!.id}"));
+        
+        setState(() {
+          listaCameras.removeWhere((c) => c.id == _cameraSelecionada!.id);
+          Info.listaCameras = listaCameras;
+          _cameraSelecionada = null;
+          _indiceSelecionado = 0;
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Câmera excluída com sucesso.")));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao excluir."), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -85,13 +124,16 @@ class _ObraDetalheState extends State<ObraDetalhe> {
       final XFile? photo = await openFile(acceptedTypeGroups: <XTypeGroup>[typeGroup]);
       
       if (photo != null) {
+        // Apenas para mostrar na tela antes de enviar (opcional, pode remover se quiser só usar a URL)
         final novaImagem = Imagens(localPath: photo.path, cameraId: _cameraSelecionada!.id);
         setState(() => Info.addImagem(novaImagem));
 
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Analisando progresso na imagem...")));
 
-        var uri = Uri.parse("$baseUrl/analisar_foto_real");
+        // Usa a NOVA ROTA específica para câmera
+        var uri = Uri.parse("$baseUrl/analisar_foto_real_camera");
         var request = http.MultipartRequest('POST', uri);
+        request.fields['camera_id'] = _cameraSelecionada!.id.toString();
         
         if (kIsWeb) {
            request.files.add(http.MultipartFile.fromBytes('file', await photo.readAsBytes(), filename: 'upload.jpg'));
@@ -115,6 +157,7 @@ class _ObraDetalheState extends State<ObraDetalhe> {
            setState(() {
              int index = listaCameras.indexWhere((c) => c.id == _cameraSelecionada!.id);
              if (index != -1) listaCameras[index] = cameraAtualizada;
+             Info.listaCameras = listaCameras; // Atualiza global
              _cameraSelecionada = cameraAtualizada;
              _mostrarAnotacoesIA = true; 
            });
@@ -135,36 +178,57 @@ class _ObraDetalheState extends State<ObraDetalhe> {
       final anguloY = double.tryParse(_angYController.text) ?? 0.0;
       final zoom = double.tryParse(_zoomController.text) ?? 10.0;
       final nomeCamera = _nomeController.text;
-      int novoId = 1;
-      if (listaCameras.isNotEmpty) novoId = listaCameras.map((c) => c.id).reduce((a, b) => a > b ? a : b) + 1;
 
       try {
-        var uri = Uri.parse("$baseUrl/renderizar_camera");
-        var request = http.MultipartRequest('POST', uri)
+        // 1. Renderiza (Para pegar a imagem e stats esperados)
+        var uriRender = Uri.parse("$baseUrl/renderizar_camera");
+        var reqRender = http.MultipartRequest('POST', uriRender)
           ..fields['obra_id'] = widget.obra.id.toString()
           ..fields['azimuth'] = anguloX.toString()
           ..fields['elevation'] = anguloY.toString()
           ..fields['zoom'] = zoom.toString();
 
-        var streamedResponse = await request.send();
-        var response = await http.Response.fromStream(streamedResponse);
+        var resRenderStream = await reqRender.send();
+        var resRender = await http.Response.fromStream(resRenderStream);
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+        if (resRender.statusCode == 200) {
+          final data = jsonDecode(resRender.body);
           final imageUrl = data['image_url'];
-          final stats = data['estatisticas'] as Map<String, dynamic>?;
+          final stats = data['estatisticas'];
 
-          final novaCamera = Cameras(
-            id: novoId, nome: nomeCamera, anguloX: anguloX, anguloY: anguloY, zoom: zoom, obraId: widget.obra.id, renderUrl: imageUrl, estatisticas: stats,
+          // 2. Salva no Banco
+          var uriSalvar = Uri.parse("$baseUrl/salvar_camera");
+          var resSalvar = await http.post(
+            uriSalvar,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "obra_id": widget.obra.id,
+              "nome": nomeCamera,
+              "angulo_x": anguloX,
+              "angulo_y": anguloY,
+              "zoom": zoom,
+              "render_url": imageUrl,
+              "estatisticas": stats
+            })
           );
 
-          setState(() {
-            listaCameras.add(novaCamera);
-            _cameraSelecionada = novaCamera;
-            _indiceSelecionado = 1;
-            _angXController.clear(); _angYController.clear(); _zoomController.clear(); _nomeController.clear();
-          });
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Render gerado!")));
+          if (resSalvar.statusCode == 200) {
+             final dadosSalvos = jsonDecode(resSalvar.body);
+             final novoId = dadosSalvos['id']; // Pega o ID gerado pelo Banco
+
+             final novaCamera = Cameras(
+                id: novoId, nome: nomeCamera, anguloX: anguloX, anguloY: anguloY, zoom: zoom, obraId: widget.obra.id, renderUrl: imageUrl, estatisticas: stats,
+             );
+
+             setState(() {
+                listaCameras.add(novaCamera);
+                Info.listaCameras = listaCameras;
+                _cameraSelecionada = novaCamera;
+                _indiceSelecionado = 1;
+                _angXController.clear(); _angYController.clear(); _zoomController.clear(); _nomeController.clear();
+             });
+             if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Câmera salva com sucesso!")));
+          }
         }
       } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Falha: $e"), backgroundColor: Colors.red));

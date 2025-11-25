@@ -10,11 +10,14 @@ from time import time
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 #imports do banco de dados
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, text, BigInteger
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, text, BigInteger, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional, Dict
+
+
 app = FastAPI()
 
 app.add_middleware(
@@ -71,6 +74,26 @@ class ObraDB(Base):
     progresso = Column(Float, default=0.0)
     caminho_ifc = Column(String(255), nullable=True)
 
+    cameras = relationship("CameraDB", back_populates="obra", cascade="all, delete-orphan")
+
+class CameraDB(Base):
+    __tablename__ = "cameras"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    obra_id = Column(BigInteger, ForeignKey("obras.id"))
+    nome = Column(String(100))
+    angulo_x = Column(Float)
+    angulo_y = Column(Float)
+    zoom = Column(Float)
+    render_url = Column(String(255)) # URL da imagem gerada pelo PyVista
+    estatisticas = Column(JSON, nullable=True) # JSON com a contagem do YOLO
+    
+    # Campos para a foto real (opcionais no início)
+    render_real_anotado_url = Column(String(255), nullable=True)
+    estatisticas_real = Column(JSON, nullable=True)
+
+    # Relacionamento inverso
+    obra = relationship("ObraDB", back_populates="cameras")
+
 # Cria as tabelas automaticamente ao iniciar o código
 Base.metadata.create_all(bind=engine)
 
@@ -101,6 +124,15 @@ class ObraCreate(BaseModel):
     status: str
     data_inicio: str 
     data_fim: str = None
+
+class CameraCreate(BaseModel):
+    obra_id: int
+    nome: str
+    angulo_x: float
+    angulo_y: float
+    zoom: float
+    render_url: str
+    estatisticas: Optional[Dict] = {}
 
 # --- CONFIGURAÇÕES ---
 OUTPUT_DIR = "resultados"
@@ -403,12 +435,17 @@ async def renderizar_camera(
     obra_id: int = Form(...),
     azimuth: float = Form(...),
     elevation: float = Form(...),
-    zoom: float = Form(...)
+    zoom: float = Form(...),
+    db: Session = Depends(get_db)
 ):
-    caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc"
-    
-    if not os.path.exists(caminho_ifc):
-        raise HTTPException(status_code=404, detail="IFC não encontrado.")
+    # Busca IFC
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    if not obra or not obra.caminho_ifc:
+        caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc"
+        if not os.path.exists(caminho_ifc):
+             raise HTTPException(status_code=404, detail="IFC não encontrado.")
+    else:
+        caminho_ifc = obra.caminho_ifc
 
     # Gera nome único
     ts = int(time() * 1000)
@@ -451,6 +488,91 @@ async def renderizar_camera(
         "estatisticas": estatisticas, 
         "total_objetos": total_objetos
     }
+
+@app.post("/salvar_camera")
+def salvar_camera(cam: CameraCreate, db: Session = Depends(get_db)):
+    nova_cam = CameraDB(
+        obra_id=cam.obra_id,
+        nome=cam.nome,
+        angulo_x=cam.angulo_x,
+        angulo_y=cam.angulo_y,
+        zoom=cam.zoom,
+        render_url=cam.render_url,
+        estatisticas=cam.estatisticas
+    )
+    db.add(nova_cam)
+    db.commit()
+    db.refresh(nova_cam)
+    return {"msg": "Câmera salva", "id": nova_cam.id}
+
+
+@app.get("/cameras/{obra_id}")
+def listar_cameras(obra_id: int, db: Session = Depends(get_db)):
+    cameras = db.query(CameraDB).filter(CameraDB.obra_id == obra_id).all()
+    return [
+        {
+            "id": c.id,
+            "nome": c.nome,
+            "angulo_x": c.angulo_x,
+            "angulo_y": c.angulo_y,
+            "zoom": c.zoom,
+            "render_url": c.render_url,
+            "estatisticas": c.estatisticas,
+            "estatisticas_real": c.estatisticas_real,
+            "render_real_anotado_url": c.render_real_anotado_url
+        }
+        for c in cameras
+    ]
+
+@app.delete("/cameras/{camera_id}")
+def deletar_camera(camera_id: int, db: Session = Depends(get_db)):
+    cam = db.query(CameraDB).filter(CameraDB.id == camera_id).first()
+    if not cam: return {"erro": "Câmera não encontrada"}
+    db.delete(cam)
+    db.commit()
+    return {"msg": "Câmera deletada"}
+
+@app.post("/analisar_foto_real_camera")
+async def analisar_foto_real_camera(
+    camera_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """ [NOVO] Analisa foto e salva resultados na câmera específica do banco """
+    ts = int(time() * 1000)
+    temp_path = os.path.join(OUTPUT_DIR, f"temp_real_{ts}.jpg")
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    estatisticas_real = {}
+    url_anotada = ""
+
+    if model:
+        results = model(temp_path)
+        for r in results:
+            for box in r.boxes:
+                cls_id = int(box.cls)
+                class_name = model.names[cls_id]
+                estatisticas_real[class_name] = estatisticas_real.get(class_name, 0) + 1
+            
+            nome_anotada = f"anotada_cam_{camera_id}_{ts}.jpg"
+            caminho_anotada = os.path.join(OUTPUT_DIR, nome_anotada)
+            r.save(filename=caminho_anotada)
+            url_anotada = f"http://127.0.0.1:8000/resultados/{nome_anotada}"
+
+    # Atualiza a câmera no banco
+    cam = db.query(CameraDB).filter(CameraDB.id == camera_id).first()
+    if cam:
+        cam.estatisticas_real = estatisticas_real
+        cam.render_real_anotado_url = url_anotada
+        db.commit()
+
+    return {
+        "status": "ok",
+        "estatisticas_real": estatisticas_real,
+        "imagem_anotada_url": url_anotada
+    }
+
 
 @app.post("/analisar_foto_real")
 async def analisar_foto_real(file: UploadFile = File(...)):
