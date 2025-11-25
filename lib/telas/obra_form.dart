@@ -1,5 +1,7 @@
 // ignore_for_file: deprecated_member_use, library_private_types_in_public_api, use_build_context_synchronously
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
@@ -68,7 +70,6 @@ class _ObraFormContentState extends State<ObraFormContent> {
   Future<bool> enviarIFCParaBackend(int obraId) async {
     if (_ifcFile == null) return false;
 
-    // Ajuste o IP se necessário (ex: 10.0.2.2 para emulador Android)
     final uri = Uri.parse("http://127.0.0.1:8000/enviar_ifc");
 
     var request = http.MultipartRequest("POST", uri);
@@ -91,6 +92,31 @@ class _ObraFormContentState extends State<ObraFormContent> {
       // print("Erro upload: $e");
       return false;
     }
+  }
+
+  // =========================== ENVIA DADOS PARA O BANCO ===========================
+  Future<bool> salvarDadosObraDB(int obraId) async {
+      final uri = Uri.parse("http://127.0.0.1:8000/criar_obra");
+      try {
+        final response = await http.post(
+            uri,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+                "id": obraId,
+                "nome": _nomeController.text,
+                "descricao": _descricaoController.text,
+                "localizacao": _localizacaoController.text,
+                "responsavel": _responsavelController.text,
+                "status": _status,
+                "data_inicio": (_dataInicio ?? DateTime.now()).toIso8601String(),
+                "data_fim": _dataFim?.toIso8601String(),
+            })
+        );
+        return response.statusCode == 200;
+      } catch (e) {
+        print("Erro DB: $e");
+        return false;
+      }
   }
 
   // =============================== BUILD ===================================
@@ -233,6 +259,13 @@ class _ObraFormContentState extends State<ObraFormContent> {
                 final obraId = DateTime.now().millisecondsSinceEpoch;
 
                 final ok = await enviarIFCParaBackend(obraId);
+
+                // SALVAR METADADOS NO BANCO (MySQL)
+                final dbOk = await salvarDadosObraDB(obraId);
+                if (!dbOk) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao salvar dados no banco.")));
+                    return;
+                }
 
                 if (!ok) {
                   setState(() => _isUploading = false);
