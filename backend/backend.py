@@ -90,6 +90,7 @@ class CameraDB(Base):
     # Campos para a foto real (opcionais no início)
     render_real_anotado_url = Column(String(255), nullable=True)
     estatisticas_real = Column(JSON, nullable=True)
+    progresso = Column(Float, default=0.0)
 
     # Relacionamento inverso
     obra = relationship("ObraDB", back_populates="cameras")
@@ -104,6 +105,23 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def atualizar_progresso_obra(obra_id: int, db: Session):
+    """Calcula a média do progresso das câmeras e salva na obra"""
+    cameras = db.query(CameraDB).filter(CameraDB.obra_id == obra_id).all()
+    
+    if not cameras:
+        return # Sem câmeras, mantém o que tá (ou zera se preferir)
+
+    soma_progresso = sum([c.progresso for c in cameras])
+    media = soma_progresso / len(cameras)
+    
+    # Atualiza a obra
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    if obra:
+        obra.progresso = media
+        db.commit()
+        print(f"Progresso da obra {obra_id} atualizado para {media:.2f}")
 
 # --- MODELOS PARA RECEBER JSON (Pydantic) ---
 class UsuarioCreate(BaseModel):
@@ -530,6 +548,7 @@ def deletar_camera(camera_id: int, db: Session = Depends(get_db)):
     if not cam: return {"erro": "Câmera não encontrada"}
     db.delete(cam)
     db.commit()
+    atualizar_progresso_obra(obra_id, db)
     return {"msg": "Câmera deletada"}
 
 @app.post("/analisar_foto_real_camera")
@@ -565,7 +584,21 @@ async def analisar_foto_real_camera(
     if cam:
         cam.estatisticas_real = estatisticas_real
         cam.render_real_anotado_url = url_anotada
+        if cam.estatisticas:
+            total_esperado = sum(cam.estatisticas.values())
+            total_real = 0
+            for key, qtd_esperada in cam.estatisticas.items():
+                qtd_real = estatisticas_real.get(key, 0)
+                # Evita que excesso de um item compense a falta de outro
+                total_real += min(qtd_real, qtd_esperada)
+            
+            if total_esperado > 0:
+                cam.progresso = total_real / total_esperado
+            else:
+                cam.progresso = 0.0
         db.commit()
+
+        atualizar_progresso_obra(cam.obra_id, db)
 
     return {
         "status": "ok",
