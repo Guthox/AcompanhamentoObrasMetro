@@ -109,7 +109,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
     }
   }
 
-  // --- CÁLCULO MATEMÁTICO PURO (Retorna Map para UI e Lógica) ---
+  // --- CÁLCULO MATEMÁTICO PURO ---
   Map<String, dynamic> _calcularStatusMatematico(double progressoReal) {
     
     if (widget.obra.dataFim == null) {
@@ -198,7 +198,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
-              // === IMAGEM HERO (Mesmo código anterior) ===
+              // === IMAGEM HERO ===
               Stack(
                 children: [
                   ClipRRect(
@@ -243,51 +243,21 @@ class _VisaoGeralState extends State<VisaoGeral> {
                 ],
               ),
 
-              // === CONTEÚDO ===
+              // === CONTEÚDO PRINCIPAL ===
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // === DROPDOWN DE CONTROLE DE STATUS ===
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Status da Obra:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
-                          DropdownButton<String>(
-                            value: statusAtual == "Parada" ? "Parada" : "Automático",
-                            underline: const SizedBox(),
-                            icon: Icon(Icons.arrow_drop_down, color: Cores.azulMetro),
-                            items: const [
-                              DropdownMenuItem(value: "Automático", child: Text("Automático (Calculado)")),
-                              DropdownMenuItem(value: "Parada", child: Text("⛔ Parada / Interrompida")),
-                            ],
-                            onChanged: (novoModo) async {
-                              if (novoModo == "Parada") {
-                                await _salvarStatusNoBanco("Parada");
-                              } else {
-                                final calculado = _calcularStatusMatematico(progressoAtual);
-                                await _salvarStatusNoBanco(calculado['texto']);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // === BARRA DE PROGRESSO ===
+                    
+                    // 1. BARRA DE PROGRESSO (MUDOU PARA CIMA)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        Text(
+                          'Progresso',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey[700]),
+                        ),
                         Text(
                           '${(progressoAtual * 100).toStringAsFixed(0)}%',
                           style: TextStyle(fontWeight: FontWeight.bold, color: Cores.azulMetro, fontSize: 16),
@@ -331,7 +301,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
 
                     const SizedBox(height: 24),
 
-                    // === CARDS INFORMATIVOS ===
+                    // 2. CARDS INFORMATIVOS (PRAZO E SITUAÇÃO)
                     if (widget.obra.dataFim != null)
                       Row(
                         children: [
@@ -359,9 +329,51 @@ class _VisaoGeralState extends State<VisaoGeral> {
                         ],
                       ),
 
+                    const SizedBox(height: 12),
+
+                    // 3. DROPDOWN DE CONTROLE DE STATUS (MOVIDO E ESTILIZADO)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        // Sombra igual aos Cards
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                      ),
+                      child: Row(
+                        children: [
+                          // Ícone igual ao InfoItem
+                          Icon(Icons.toggle_on_outlined, color: Colors.grey, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                value: statusAtual == "Parada" ? "Parada" : "Automático",
+                                icon: Icon(Icons.keyboard_arrow_down, color: Cores.azulMetro),
+                                style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w500),
+                                items: const [
+                                  DropdownMenuItem(value: "Automático", child: Text("Status Automático")),
+                                  DropdownMenuItem(value: "Parada", child: Text("Status: Parada")),
+                                ],
+                                onChanged: (novoModo) async {
+                                  if (novoModo == "Parada") {
+                                    await _salvarStatusNoBanco("Parada");
+                                  } else {
+                                    final calculado = _calcularStatusMatematico(progressoAtual);
+                                    await _salvarStatusNoBanco(calculado['texto']);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                     const SizedBox(height: 24),
 
-                    // === RESTANTE DO CÓDIGO (Descrição, Detalhes, Excluir) MANTIDO ===
+                    // 4. RESTANTE (Descrição, Detalhes...)
                     Text("Descrição", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Cores.azulMetro)),
                     const SizedBox(height: 8),
                     Container(
