@@ -26,16 +26,23 @@ class _ObraFormContentState extends State<ObraFormContent> {
 
   DateTime? _dataInicio;
   DateTime? _dataFim;
-  String _status = 'Em andamento';
+  // O status não é mais uma variável de estado escolhida pelo usuário
 
   PlatformFile? _ifcFile;
   bool _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Define data de início padrão como hoje
+    _dataInicio = DateTime.now();
+  }
 
   // =============================== DATE PICKERS ===============================
   Future<void> _selecionarDataInicio() async {
     final data = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _dataInicio ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
@@ -45,7 +52,7 @@ class _ObraFormContentState extends State<ObraFormContent> {
   Future<void> _selecionarDataFim() async {
     final data = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _dataFim ?? DateTime.now().add(const Duration(days: 30)),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
@@ -69,7 +76,7 @@ class _ObraFormContentState extends State<ObraFormContent> {
   Future<bool> enviarIFCParaBackend(int obraId) async {
     if (_ifcFile == null) return false;
 
-    // Ajuste o IP se estiver no emulador Android (10.0.2.2)
+    // Ajuste o IP se necessário
     final uri = Uri.parse("http://127.0.0.1:8000/enviar_ifc");
 
     var request = http.MultipartRequest("POST", uri);
@@ -95,7 +102,7 @@ class _ObraFormContentState extends State<ObraFormContent> {
   }
 
   // =========================== ENVIA DADOS PARA O BANCO (MySQL) ===========================
-  Future<bool> salvarDadosObraDB(int obraId) async {
+  Future<bool> salvarDadosObraDB(int obraId, String statusCalculado) async {
       final uri = Uri.parse("http://127.0.0.1:8000/criar_obra");
       try {
         final response = await http.post(
@@ -107,7 +114,7 @@ class _ObraFormContentState extends State<ObraFormContent> {
                 "descricao": _descricaoController.text,
                 "localizacao": _localizacaoController.text,
                 "responsavel": _responsavelController.text,
-                "status": _status,
+                "status": statusCalculado,
                 "data_inicio": (_dataInicio ?? DateTime.now()).toIso8601String(),
                 "data_fim": _dataFim?.toIso8601String(),
             })
@@ -165,22 +172,8 @@ class _ObraFormContentState extends State<ObraFormContent> {
                     _spacer(),
                     _campoTexto(_responsavelController, "Responsável", Icons.person),
                     _spacer(),
-
-                    DropdownButtonFormField<String>(
-                      value: _status,
-                      decoration: InputDecoration(
-                        labelText: "Status",
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        prefixIcon: const Icon(Icons.flag),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: "Em andamento", child: Text("Em andamento")),
-                        DropdownMenuItem(value: "Concluída", child: Text("Concluída")),
-                        DropdownMenuItem(value: "Parada", child: Text("Parada")),
-                      ],
-                      onChanged: (value) => setState(() => _status = value!),
-                    ),
-                    _spacer(),
+                    
+                    // --- REMOVIDO O DROPDOWN DE STATUS ---
 
                     Row(
                       children: [
@@ -251,11 +244,23 @@ class _ObraFormContentState extends State<ObraFormContent> {
 
                 setState(() => _isUploading = true);
 
-                // ID Único baseado no tempo
+                // --- LÓGICA DE STATUS AUTOMÁTICO INICIAL ---
+                String statusInicial = "Em andamento";
+                if (_dataInicio != null) {
+                  final now = DateTime.now();
+                  final hoje = DateTime(now.year, now.month, now.day);
+                  final inicio = DateTime(_dataInicio!.year, _dataInicio!.month, _dataInicio!.day);
+                  
+                  if (inicio.isAfter(hoje)) {
+                    statusInicial = "Não iniciada";
+                  }
+                }
+                // -------------------------------------------
+
                 final obraId = DateTime.now().millisecondsSinceEpoch;
 
-                // 1. Salva Metadados no Banco
-                final dbOk = await salvarDadosObraDB(obraId);
+                final dbOk = await salvarDadosObraDB(obraId, statusInicial);
+                
                 if (!dbOk) {
                     setState(() => _isUploading = false);
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao salvar dados no banco."), backgroundColor: Colors.red));
@@ -270,13 +275,12 @@ class _ObraFormContentState extends State<ObraFormContent> {
                   return;
                 }
 
-                // Sucesso -> Retorna Objeto Local para atualizar a UI sem precisar de outro fetch
                 final obra = Obras(
                   id: obraId,
                   nome: _nomeController.text,
                   descricao: _descricaoController.text,
                   localizacao: _localizacaoController.text,
-                  status: _status,
+                  status: statusInicial,
                   dataInicio: _dataInicio ?? DateTime.now(),
                   dataFim: _dataFim,
                   responsavel: _responsavelController.text,
