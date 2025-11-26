@@ -26,7 +26,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
   @override
   void initState() {
     super.initState();
-    _carregarObras(); // Carrega ao iniciar
+    _carregarObras(); 
   }
 
   // --- BUSCA DADOS DO BACKEND ---
@@ -110,7 +110,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        // Título centralizado e limpo, sem botão de refresh
         title: const Center(child: Text("Obras", style: TextStyle(color: Colors.white))),
         backgroundColor: Cores.azulMetro,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -119,7 +118,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
         children: [
           // 1. BARRA DE PESQUISA
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), // Reduzi o padding inferior
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), 
             child: TextField(
               controller: _searchController,
               onChanged: _filtrarObras,
@@ -154,7 +153,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
             ),
           ),
 
-          // 2. CONTADOR DE RESULTADOS (RESTAURADO)
+          // 2. CONTADOR
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
             child: Align(
@@ -212,46 +211,80 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
   Widget _obraCard(BuildContext context, Obras obraCard) {
     bool temImagem = obraCard.imagem.isNotEmpty;
     
-    int diasRestantes = 0;
+    // --- LÓGICA DE PRAZO E COR DO TEXTO ---
     String textoPrazo = "Sem prazo";
     Color corPrazo = Colors.grey;
-    
+    IconData iconePrazo = Icons.access_time;
+
     if (obraCard.dataFim != null) {
       final hoje = DateTime.now();
       final dataFim = DateTime(obraCard.dataFim!.year, obraCard.dataFim!.month, obraCard.dataFim!.day);
       final dataInicio = DateTime(obraCard.dataInicio.year, obraCard.dataInicio.month, obraCard.dataInicio.day);
       final dataHoje = DateTime(hoje.year, hoje.month, hoje.day);
-      
-      final prazoTotal = dataFim.difference(dataInicio).inDays;
-      final diasPassados = dataHoje.difference(dataInicio).inDays;
-      diasRestantes = dataFim.difference(dataHoje).inDays;
-      
-      if (diasRestantes < 0) {
-        textoPrazo = "${diasRestantes.abs()} dias de atraso";
-      } else if (diasRestantes == 0) {
-        textoPrazo = "Acaba hoje";
-      } else {
-        textoPrazo = "$diasRestantes dias restantes";
+
+      // CASO 1: NÃO INICIOU AINDA
+      if (dataHoje.isBefore(dataInicio)) {
+         final diasParaIniciar = dataInicio.difference(dataHoje).inDays;
+         textoPrazo = "$diasParaIniciar dias para iniciar";
+         corPrazo = Colors.grey[600]!;
+         iconePrazo = Icons.hourglass_empty;
       }
+      // CASO 2: OBRA EM CURSO OU FINALIZADA
+      else {
+        final diasRestantes = dataFim.difference(dataHoje).inDays;
+        final prazoTotal = dataFim.difference(dataInicio).inDays;
+        final diasPassados = dataHoje.difference(dataInicio).inDays;
 
+        if (diasRestantes < 0) {
+          // Prazo estourado
+          textoPrazo = "${diasRestantes.abs()} dias de atraso";
+          corPrazo = Colors.red;
+        } else if (diasRestantes == 0) {
+          textoPrazo = "Acaba hoje";
+          corPrazo = Colors.orange;
+        } else {
+          textoPrazo = "$diasRestantes dias restantes";
+          
+          // Verifica se está atrasada em relação ao progresso esperado
+          if (prazoTotal > 0 && obraCard.progresso < 1.0) {
+             double progressoEsperado = diasPassados / prazoTotal;
+             // Margem de tolerância pequena (ex: 5%)
+             if (obraCard.progresso < (progressoEsperado - 0.05)) {
+               corPrazo = Colors.red; // Atrasada (texto vermelho)
+             } else {
+               corPrazo = Colors.green; // Em dia ou adiantada (texto verde)
+             }
+          } else {
+             corPrazo = Colors.green;
+          }
+        }
+      }
+      
+      // Se já concluiu 100%, força verde ou texto de concluído se preferir
       if (obraCard.progresso >= 1.0) {
-         corPrazo = Colors.green; 
-      } else if (diasRestantes < 0) {
-         corPrazo = Colors.red; 
-      } else if (prazoTotal > 0) {
-         double progressoEsperado = diasPassados / prazoTotal;
-         if (progressoEsperado > 1.0) progressoEsperado = 1.0;
-         if (progressoEsperado < 0.0) progressoEsperado = 0.0;
-
-         if (obraCard.progresso < progressoEsperado) {
-           corPrazo = Colors.red;
-         } else {
-           corPrazo = Colors.green;
-         }
+         corPrazo = Colors.green;
       }
     }
 
-    String statusText = obraCard.status;
+    // --- LÓGICA DO BADGE (STATUS) ---
+    String statusOriginal = obraCard.status.toLowerCase();
+    String statusBadge = "Em andamento";
+    Color corBadge = Colors.blue;
+
+    if (statusOriginal == "parada") {
+      statusBadge = "Parada";
+      corBadge = Colors.orange;
+    } else if (statusOriginal == "concluída" || obraCard.progresso >= 1.0) {
+      statusBadge = "Concluída";
+      corBadge = Colors.green;
+    } else if (statusOriginal == "não iniciada" || DateTime.now().isBefore(obraCard.dataInicio)) {
+      statusBadge = "Não iniciada";
+      corBadge = Colors.grey;
+    } else {
+      // Qualquer outra coisa (Atrasada, Adiantada, Em dia, Em andamento) vira "Em andamento"
+      statusBadge = "Em andamento";
+      corBadge = Colors.blue;
+    }
 
     return Hero(
       tag: 'obra_img_${obraCard.id}',
@@ -261,10 +294,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
             context,
             MaterialPageRoute(builder: (_) => ObraDetalhe(obra: obraCard)),
           );
-
-          // Recarrega ao voltar
-          await _carregarObras();
-
+          if (!mounted) return;
           if (resultado == 'deleted') {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -273,6 +303,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
               ),
             );
           }
+          await _carregarObras();
         },
         child: Container(
           decoration: BoxDecoration(
@@ -285,6 +316,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 1. IMAGEM
               Expanded(
                 flex: 3,
                 child: ClipRRect(
@@ -301,6 +333,8 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                         ),
                 ),
               ),
+              
+              // 2. DADOS
               Expanded(
                 flex: 2,
                 child: Padding(
@@ -309,6 +343,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // Título + Badge Simplificado
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -324,17 +359,19 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: _corStatus(statusText).withOpacity(0.1),
+                              color: corBadge.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              statusText.toUpperCase(),
-                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: _corStatus(statusText)),
+                              statusBadge.toUpperCase(),
+                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: corBadge),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
+                      
+                      // Localização
                       Row(
                         children: [
                           const Icon(Icons.location_on, color: Colors.grey, size: 12),
@@ -350,9 +387,11 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                         ],
                       ),
                       const SizedBox(height: 8),
+                      
+                      // Prazo (Texto Colorido)
                       Row(
                         children: [
-                          Icon(Icons.access_time, size: 12, color: corPrazo),
+                          Icon(iconePrazo, size: 12, color: corPrazo),
                           const SizedBox(width: 4),
                           Text(
                             textoPrazo,
@@ -361,6 +400,8 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
                         ],
                       ),
                       const SizedBox(height: 6),
+                      
+                      // Barra de Progresso
                       Row(
                         children: [
                           Expanded(
@@ -410,7 +451,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
         );
 
         if (novaObra != null) {
-          await _carregarObras();
+          if (!mounted) return;
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -418,6 +459,7 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
               backgroundColor: Colors.green,
             ),
           );
+          await _carregarObras();
         }
       },
       child: Container(
@@ -454,16 +496,6 @@ class _ObrasDashboardState extends State<ObrasDashboard> {
         ],
       ),
     );
-  }
-
-  Color _corStatus(String? status) {
-    if (status == null) return Colors.grey;
-    switch (status.toLowerCase()) {
-      case 'concluída': return Colors.green;
-      case 'atrasada': return Colors.red;
-      case 'em andamento': return Colors.blue;
-      default: return Colors.orange;
-    }
   }
 }
 

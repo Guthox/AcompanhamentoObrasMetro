@@ -109,25 +109,69 @@ def get_db():
 # No arquivo backend.py
 
 def atualizar_progresso_obra(obra_id: int, db: Session):
-    """Calcula a média do progresso das câmeras e salva na obra"""
     cameras = db.query(CameraDB).filter(CameraDB.obra_id == obra_id).all()
     
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    if not obra: return
+
     if not cameras:
-        obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
-        if obra:
-            obra.progresso = 0.0
-            db.commit()
-            print(f"Obra {obra_id}: Sem câmeras. Progresso zerado.")
+        obra.progresso = 0.0
+    else:
+        soma_progresso = sum([c.progresso for c in cameras])
+        media = soma_progresso / len(cameras)
+        obra.progresso = media
+    
+    db.commit()
+    print(f"Progresso da obra {obra_id} atualizado para {obra.progresso:.2f}")
+    
+    atualizar_status_conforme_progresso(obra, db)
+
+def atualizar_status_conforme_progresso(obra: ObraDB, db: Session):
+    if obra.progresso >= 1.0:
+        obra.status = "Concluída"
+        db.commit()
         return
 
-    soma_progresso = sum([c.progresso for c in cameras])
-    media = soma_progresso / len(cameras)
-    
-    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
-    if obra:
-        obra.progresso = media
+    if obra.status == "Parada":
+        return
+
+    if not obra.data_inicio or not obra.data_fim:
+        return
+
+    agora = datetime.now()
+    inicio = obra.data_inicio
+    fim = obra.data_fim
+
+    if agora < inicio:
+        obra.status = "Não iniciada"
         db.commit()
-        print(f"Progresso da obra {obra_id} atualizado para {media:.2f}")
+        return
+
+    total_dias = (fim - inicio).days
+    dias_passados = (agora - inicio).days
+
+    if total_dias <= 0: return
+
+    progresso_esperado = dias_passados / total_dias
+    if progresso_esperado > 1.0: progresso_esperado = 1.0
+    if progresso_esperado < 0.0: progresso_esperado = 0.0
+
+    novo_status = "Em dia"
+
+    if obra.progresso < (progresso_esperado):
+        novo_status = "Atrasada"
+    elif obra.progresso > (progresso_esperado):
+        novo_status = "Adiantada"
+    else:
+        novo_status = "Em dia"
+    
+    if agora > fim and obra.progresso < 1.0:
+        novo_status = "Atrasada"
+
+    if obra.status != novo_status:
+        print(f"--- Atualizando Status Obra {obra.id}: {obra.status} -> {novo_status}")
+        obra.status = novo_status
+        db.commit()
 
 # --- MODELOS PARA RECEBER JSON (Pydantic) ---
 class UsuarioCreate(BaseModel):
@@ -159,6 +203,9 @@ class CameraCreate(BaseModel):
     zoom: float
     render_url: str
     estatisticas: Optional[Dict] = {}
+
+class StatusUpdate(BaseModel):
+    status: str
 
 # --- CONFIGURAÇÕES ---
 OUTPUT_DIR = "resultados"
@@ -498,6 +545,7 @@ async def analisar(
         if obra_db:
             obra_db.progresso = progresso_final
             db.commit()
+            atualizar_status_conforme_progresso(obra_db, db)
 
     return {
         "status": "ok",
@@ -742,3 +790,14 @@ async def analisar_foto_real(file: UploadFile = File(...)):
         if 'temp_path' in locals() and os.path.exists(temp_path):
              os.remove(temp_path)
         return {"status": "error", "detail": str(e)}
+    
+@app.patch("/obras/{obra_id}/status")
+def atualizar_status_obra(obra_id: int, status_data: StatusUpdate, db: Session = Depends(get_db)):
+    obra = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    if not obra:
+        raise HTTPException(status_code=404, detail="Obra não encontrada")
+    
+    obra.status = status_data.status
+    db.commit()
+    
+    return {"msg": "Status atualizado", "novo_status": obra.status}

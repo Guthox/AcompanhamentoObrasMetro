@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -19,7 +19,6 @@ class VisaoGeral extends StatefulWidget {
 }
 
 class _VisaoGeralState extends State<VisaoGeral> {
-  // Variáveis para guardar o estado atualizado da tela
   late double progressoAtual;
   late String descricaoAtual;
   late String statusAtual;
@@ -28,20 +27,16 @@ class _VisaoGeralState extends State<VisaoGeral> {
   @override
   void initState() {
     super.initState();
-    // 1. Carrega os dados iniciais que vieram da tela anterior
     _inicializarDadosLocais();
-    // 2. Busca imediatamente os dados frescos do banco de dados
     _atualizarDadosDoBanco();
   }
 
-  // Isso garante que se a tela pai mandar atualizar, essa tela obedece
   @override
   void didUpdateWidget(covariant VisaoGeral oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.obra != oldWidget.obra) {
        _inicializarDadosLocais();
     }
-    // Sempre que o widget for reconstruído pelo pai, busca dados novos
     _atualizarDadosDoBanco();
   }
 
@@ -51,18 +46,11 @@ class _VisaoGeralState extends State<VisaoGeral> {
     statusAtual = widget.obra.status;
   }
 
-  // --- FUNÇÃO QUE VAI NO BANCO PEGAR O VALOR REAL (13%) ---
+  // --- BUSCA DADOS E APLICA LÓGICA AUTOMÁTICA ---
   Future<void> _atualizarDadosDoBanco() async {
     if (carregando) return;
-    
-    // Pequeno delay para garantir que transições de tela terminem
-    await Future.delayed(const Duration(milliseconds: 100));
-    
     if (!mounted) return;
     
-    // Marca que está atualizando (sem travar a tela com loading)
-    carregando = true;
-
     try {
       final uri = Uri.parse("http://127.0.0.1:8000/obra/${widget.obra.id}");
       final response = await http.get(uri);
@@ -72,27 +60,58 @@ class _VisaoGeralState extends State<VisaoGeral> {
         
         if (mounted) {
           setState(() {
-            // AQUI É A MÁGICA: Pega o valor do banco e joga na tela
             progressoAtual = (dados['progresso'] ?? 0.0).toDouble();
             descricaoAtual = dados['descricao'] ?? descricaoAtual;
-            statusAtual = dados['status'] ?? statusAtual;
+            statusAtual = dados['status'] ?? statusAtual; 
             
-            // Atualiza também o objeto original para manter sincronia
             widget.obra.progresso = progressoAtual;
             widget.obra.descricao = descricaoAtual;
             widget.obra.status = statusAtual;
           });
+
+          _verificarAtualizacaoAutomaticaDeStatus();
         }
       }
     } catch (e) {
-      print("Erro ao atualizar dados da obra: $e");
-    } finally {
-      if (mounted) carregando = false;
+      print("Erro ao atualizar dados: $e");
     }
   }
 
-  // --- CÁLCULO DE STATUS (Mantido igual) ---
-  Map<String, dynamic> _calcularStatusObra(double progressoReal) {
+  // --- LÓGICA INTELIGENTE DE STATUS ---
+  void _verificarAtualizacaoAutomaticaDeStatus() {
+    if (statusAtual == "Parada") return;
+
+    final statusCalculado = _calcularStatusMatematico(progressoAtual);
+    final textoCalculado = statusCalculado['texto'];
+
+    if (textoCalculado != statusAtual) {
+      _salvarStatusNoBanco(textoCalculado);
+    }
+  }
+
+  Future<void> _salvarStatusNoBanco(String novoStatus) async {
+    try {
+      final uri = Uri.parse("http://127.0.0.1:8000/obras/${widget.obra.id}/status");
+      final response = await http.patch(
+        uri,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"status": novoStatus}),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          statusAtual = novoStatus;
+          widget.obra.status = novoStatus;
+        });
+      }
+    } catch (e) {
+      print("Erro ao salvar status: $e");
+    }
+  }
+
+  // --- CÁLCULO MATEMÁTICO PURO (Retorna Map para UI e Lógica) ---
+  Map<String, dynamic> _calcularStatusMatematico(double progressoReal) {
+    
     if (widget.obra.dataFim == null) {
       return {"texto": "Sem data final", "cor": Colors.grey, "esperado": 0.0};
     }
@@ -120,16 +139,16 @@ class _VisaoGeralState extends State<VisaoGeral> {
     if (progressoEsperado < 0.0) progressoEsperado = 0.0;
 
     if (hoje.isAfter(fim) && progressoReal < 1.0) {
-       return {"texto": "Atrasada (Prazo Esgotado)", "cor": Colors.red, "esperado": 1.0};
+       return {"texto": "Atrasada", "cor": Colors.red, "esperado": 1.0};
     }
 
     String textoStatus;
     Color corStatus;
 
-    if (progressoReal < progressoEsperado) {
+    if (progressoReal < (progressoEsperado)) {
       textoStatus = "Atrasada";
       corStatus = Colors.red;
-    } else if (progressoReal > progressoEsperado) {
+    } else if (progressoReal > (progressoEsperado)) {
       textoStatus = "Adiantada";
       corStatus = Colors.green;
     } else {
@@ -160,12 +179,16 @@ class _VisaoGeralState extends State<VisaoGeral> {
       diasRestantes = fim.difference(hoje).inDays;
     }
 
-    // Usa a variável de estado 'progressoAtual' em vez de calcular manualmente
-    final statusData = _calcularStatusObra(progressoAtual);
+    Map<String, dynamic> statusData;
+    
+    if (statusAtual == "Parada") {
+      statusData = {"texto": "Parada", "cor": Colors.orange, "esperado": 0.0};
+    } else {
+      statusData = _calcularStatusMatematico(progressoAtual);
+    }
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      // Adicionei RefreshIndicator para você poder puxar a tela pra baixo e atualizar manualmente também
       body: RefreshIndicator(
         onRefresh: () async {
             carregando = false; 
@@ -175,7 +198,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
-              // === IMAGEM HERO ===
+              // === IMAGEM HERO (Mesmo código anterior) ===
               Stack(
                 children: [
                   ClipRRect(
@@ -224,13 +247,49 @@ class _VisaoGeralState extends State<VisaoGeral> {
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // === STATUS E BARRA DE PROGRESSO ===
+                    // === DROPDOWN DE CONTROLE DE STATUS ===
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Status da Obra:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+                          DropdownButton<String>(
+                            value: statusAtual == "Parada" ? "Parada" : "Automático",
+                            underline: const SizedBox(),
+                            icon: Icon(Icons.arrow_drop_down, color: Cores.azulMetro),
+                            items: const [
+                              DropdownMenuItem(value: "Automático", child: Text("Automático (Calculado)")),
+                              DropdownMenuItem(value: "Parada", child: Text("⛔ Parada / Interrompida")),
+                            ],
+                            onChanged: (novoModo) async {
+                              if (novoModo == "Parada") {
+                                await _salvarStatusNoBanco("Parada");
+                              } else {
+                                final calculado = _calcularStatusMatematico(progressoAtual);
+                                await _salvarStatusNoBanco(calculado['texto']);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // === BARRA DE PROGRESSO ===
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '${(progressoAtual * 100).toStringAsFixed(0)}%', // Usa o valor do estado
+                          '${(progressoAtual * 100).toStringAsFixed(0)}%',
                           style: TextStyle(fontWeight: FontWeight.bold, color: Cores.azulMetro, fontSize: 16),
                         ),
                       ],
@@ -245,14 +304,14 @@ class _VisaoGeralState extends State<VisaoGeral> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: LinearProgressIndicator(
-                                value: progressoAtual, // Usa o valor do estado
+                                value: progressoAtual,
                                 color: statusData['cor'],
                                 backgroundColor: Colors.grey[300],
                                 minHeight: 12,
                               ),
                             ),
                             
-                            if (statusData['esperado'] > 0 && statusData['esperado'] < 1.0)
+                            if (statusAtual != "Parada" && statusData['esperado'] > 0 && statusData['esperado'] < 1.0)
                               Padding(
                                 padding: EdgeInsets.only(left: constraints.maxWidth * statusData['esperado']),
                                 child: Column(
@@ -283,7 +342,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
                               value: diasRestantes < 0 
                                   ? "${diasRestantes.abs()} dias atraso" 
                                   : "$diasRestantes dias restantes", 
-                              valueColor: (diasRestantes < 0 || (diasRestantes < 10 && progressoAtual < 0.9)) 
+                              valueColor: (diasRestantes < 0) 
                                   ? Colors.red 
                                   : Colors.black87,
                             ),
@@ -293,7 +352,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
                             child: StatusCard(
                               icon: Icons.analytics, 
                               label: "Situação", 
-                              value: statusData['texto'], 
+                              value: statusAtual,
                               valueColor: statusData['cor'],
                             ),
                           ),
@@ -302,7 +361,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
 
                     const SizedBox(height: 24),
 
-                    // === DESCRIÇÃO ===
+                    // === RESTANTE DO CÓDIGO (Descrição, Detalhes, Excluir) MANTIDO ===
                     Text("Descrição", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Cores.azulMetro)),
                     const SizedBox(height: 8),
                     Container(
@@ -313,15 +372,12 @@ class _VisaoGeralState extends State<VisaoGeral> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.grey.shade200)
                       ),
-                      child: Text(descricaoAtual, style: const TextStyle(fontSize: 15, height: 1.4)), // Usa variável local
+                      child: Text(descricaoAtual, style: const TextStyle(fontSize: 15, height: 1.4)),
                     ),
 
                     const SizedBox(height: 24),
-
-                    // === INFORMAÇÕES TÉCNICAS ===
                     Text("Detalhes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Cores.azulMetro)),
                     const SizedBox(height: 12),
-                    
                     InfoItem(icon: Icons.location_on, titulo: "Localização", valor: widget.obra.localizacao),
                     InfoItem(icon: Icons.engineering, titulo: "Responsável", valor: widget.obra.responsavel),
                     InfoItem(icon: Icons.calendar_today, titulo: "Início", valor: _formatarData(widget.obra.dataInicio)),
@@ -329,8 +385,6 @@ class _VisaoGeralState extends State<VisaoGeral> {
                       InfoItem(icon: Icons.flag, titulo: "Previsão de Término", valor: _formatarData(widget.obra.dataFim!)),
 
                     const SizedBox(height: 40),
-
-                    // === BOTÃO EXCLUIR ===
                     Center(
                       child: TextButton.icon(
                         icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -347,7 +401,7 @@ class _VisaoGeralState extends State<VisaoGeral> {
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text("Excluir obra"),
-                              content: Text("Tem certeza que deseja excluir '${widget.obra.nome}'? Isso apagará todas as câmeras e fotos associadas."),
+                              content: Text("Tem certeza que deseja excluir '${widget.obra.nome}'?"),
                               actions: [
                                 TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
                                 ElevatedButton(
@@ -363,17 +417,9 @@ class _VisaoGeralState extends State<VisaoGeral> {
                             try {
                               await http.delete(Uri.parse("http://127.0.0.1:8000/obras/${widget.obra.id}"));
                             } catch (e) {
-                              print("Erro ao deletar do backend: $e");
+                              print("Erro ao deletar: $e");
                             }
-
-                            final idsCamerasParaExcluir = Info.listaCameras
-                                .where((c) => c.obraId == widget.obra.id)
-                                .map((c) => c.id)
-                                .toList();
-                            Info.listaImagens.removeWhere((img) => idsCamerasParaExcluir.contains(img.cameraId));
-                            Info.listaCameras.removeWhere((c) => c.obraId == widget.obra.id);
                             Info.listaObras.removeWhere((o) => o.id == widget.obra.id);
-
                             if (mounted) Navigator.pop(context, 'deleted');
                           }
                         },
