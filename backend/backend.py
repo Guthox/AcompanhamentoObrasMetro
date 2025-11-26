@@ -376,97 +376,139 @@ def get_obra(obra_id: int, db: Session = Depends(get_db)):
 
 @app.post("/analisar")
 async def analisar(
-    obra_id: int = Form(...),
     foto: UploadFile = File(...),
+    obra_id: int = Form(...),
     db: Session = Depends(get_db)
 ):
-    # -------------------------
-    # 1) CARREGA IFC DA OBRA
-    # -------------------------
-    obra_db = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+    print(f"Analise inteligente iniciada para obra {obra_id}")
     
-    if obra_db and obra_db.caminho_ifc:
-        caminho_ifc = obra_db.caminho_ifc
-    else:
-        caminho_ifc = f"{IFC_DIR}/obra_{obra_id}.ifc" # Fallback
-
-    if not os.path.exists(caminho_ifc):
-        return {"erro": f"Arquivo IFC da obra {obra_id} não encontrado"}
-
-    ifc = ifcopenshell.open(caminho_ifc)
-
-    # Conta planejado
-    planejado = {tipo: len(ifc.by_type(tipo)) for tipo in TIPOS_IFC}
-
+    TIPOS_IFC = {
+        "IfcWall": "parede",
+        "IfcColumn": "coluna",
+        "IfcBeam": "viga",
+        "IfcSlab": "laje",
+    }
+    
     # -------------------------
-    # 2) Salva imagem enviada
+    # 1) Salva a imagem e Roda o YOLO
     # -------------------------
     temp_path = f"{OUTPUT_DIR}/obra_{obra_id}_entrada.jpg"
-
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(foto.file, buffer)
 
-    # -------------------------
-    # 3) YOLO
-    # -------------------------
     result = model(temp_path)[0]
 
     ts = int(time() * 1000)
     anotada_filename = f"anotada_{obra_id}_{ts}.jpg"
     anotada_path = f"{OUTPUT_DIR}/{anotada_filename}"
-
     result.save(filename=anotada_path)
+    url_anotada = f"http://127.0.0.1:8000/resultados/{anotada_filename}"
 
-    # -------------------------
-    # 4) Detecções YOLO
-    # -------------------------
-    detectado = {}
-
+    # Contagem do que foi achado na foto REAL
+    detectado_real = {}
     for det in result.boxes:
         nome = model.names[int(det.cls)]
-        detectado[nome] = detectado.get(nome, 0) + 1
-
-    # YOLO → IFC
-    detect_ifc = {
-        tipo: detectado.get(nome_yolo, 0)
-        for tipo, nome_yolo in TIPOS_IFC.items()
-    }
+        detectado_real[nome] = detectado_real.get(nome, 0) + 1
 
     # -------------------------
-    # 5) Progresso
+    # 2) Tenta encontrar a Câmera Virtual (Smart Match)
     # -------------------------
-    total_plan = sum(planejado.values()) or 1
-    pesos = {t: planejado[t] / total_plan for t in planejado}
+    cameras = db.query(CameraDB).filter(CameraDB.obra_id == obra_id).all()
+    
+    melhor_camera = None
+    menor_diferenca = float('inf')
+    base_para_calculo = {} 
+    
+    for cam in cameras:
+        if not cam.estatisticas: continue
+        
+        diff_total = 0
+        estatisticas_cam = cam.estatisticas
+        
+        for tipo, qtd_real in detectado_real.items():
+            qtd_cam = estatisticas_cam.get(tipo, 0)
+            diff_total += abs(qtd_real - qtd_cam)
+            
+        if diff_total < menor_diferenca:
+            menor_diferenca = diff_total
+            melhor_camera = cam
 
-    progresso_total = 0
-    progresso_tipo = {}
+    # Define se usa Câmera ou IFC Total
+    USAR_CAMERA = False
+    if melhor_camera and menor_diferenca < 15: # Tolerância
+        USAR_CAMERA = True
+        base_para_calculo = melhor_camera.estatisticas
+        print(f"--> Match encontrado! Salvando na câmera: {melhor_camera.nome}")
+    else:
+        print("--> Nenhuma câmera parecida. Salvando na Obra Geral.")
+        obra_db = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
+        caminho_ifc = obra_db.caminho_ifc if obra_db and obra_db.caminho_ifc else f"{IFC_DIR}/obra_{obra_id}.ifc"
+        
+        if os.path.exists(caminho_ifc):
+            ifc = ifcopenshell.open(caminho_ifc)
+            for ifc_type, yolo_name in TIPOS_IFC.items():
+                 qtd = len(ifc.by_type(ifc_type))
+                 if qtd > 0:
+                     base_para_calculo[yolo_name] = qtd
+        else:
+             base_para_calculo = detectado_real
 
-    for tipo in planejado:
-        det = detect_ifc[tipo]
-        plan = planejado[tipo]
+    # -------------------------
+    # 3) Cálculo do Progresso
+    # -------------------------
+    progresso_acumulado = 0.0
+    total_itens_base = 0
+    
+    for tipo, qtd_base in base_para_calculo.items():
+        if qtd_base <= 0: continue
+        qtd_real = detectado_real.get(tipo, 0)
+        
+        # Limita a 100% por item
+        percentual = min(1.0, qtd_real / qtd_base)
+        
+        progresso_acumulado += percentual * qtd_base
+        total_itens_base += qtd_base
+        
+    progresso_final = 0.0
+    if total_itens_base > 0:
+        progresso_final = progresso_acumulado / total_itens_base
 
-        pct = det / plan if plan > 0 else 0
-        progresso_tipo[tipo] = round(pct * 100, 2)
-        progresso_total += pct * pesos[tipo]
+    # Aplica Boost
+    progresso_final = aplicar_boost_progresso(progresso_final)
+    progresso_final_pct = round(progresso_final * 100, 1)
 
-    progresso_total = round(progresso_total * 100, 2)
-
-    #Salva progresso no bd
+    # -------------------------
+    # 4) SALVAMENTO NO BANCO (AQUI ESTÁ A CORREÇÃO)
+    # -------------------------
+    
     obra_db = db.query(ObraDB).filter(ObraDB.id == obra_id).first()
-    if obra_db:
-        obra_db.progresso = progresso_total / 100.0
-        db.commit()
 
-    # -------------------------
-    # 6) Retorno
-    # -------------------------
+    if USAR_CAMERA and melhor_camera:
+        # A) Se identificou uma câmera, atualiza a CÂMERA específica
+        melhor_camera.estatisticas_real = detectado_real
+        melhor_camera.render_real_anotado_url = url_anotada
+        melhor_camera.progresso = progresso_final
+        db.commit()
+        
+        # E recalcula a média da obra inteira baseado nas câmeras
+        atualizar_progresso_obra(obra_id, db)
+        
+    else:
+        # B) Se foi genérico, atualiza a OBRA diretamente (sobrescreve média)
+        if obra_db:
+            obra_db.progresso = progresso_final
+            db.commit()
+
     return {
-        "obra_id": obra_id,
-        "planejado": planejado,
-        "detectado": detectado,
-        "progresso_por_tipo": progresso_tipo,
-        "progresso_total": progresso_total,
-        "imagem_anotada": anotada_filename
+        "status": "ok",
+        "estatisticas_real": detectado_real,
+        "imagem_anotada_url": url_anotada,
+        "imagem_anotada_path": anotada_filename,
+        "dados_ifc": {
+            "obra_id": obra_id,
+            "base_usada": f"Câmera: {melhor_camera.nome}" if USAR_CAMERA else "Total do Prédio",
+            "progresso_calculado": progresso_final_pct
+        }
     }
 
 @app.post("/renderizar_camera")

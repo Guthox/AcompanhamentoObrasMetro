@@ -3,7 +3,7 @@ import 'dart:typed_data';
 class Obras {
   final int id;
   final String nome;
-  final String descricao;
+  String descricao;
   final String localizacao;
   final String responsavel;
   String status;

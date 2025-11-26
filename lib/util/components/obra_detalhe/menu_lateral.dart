@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:obras_view/telas/enviar_imagem.dart';
 import 'package:obras_view/util/cameras.dart';
 import 'package:obras_view/util/cores.dart';
+
 
 class MenuLateral extends StatelessWidget {
   final List<Cameras> listaCameras;
@@ -43,6 +45,7 @@ class MenuLateral extends StatelessWidget {
               fecharDrawerSeMobile();
             },
           ),
+
           Expanded(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -73,6 +76,31 @@ class MenuLateral extends StatelessWidget {
               ),
             ),
           ),
+
+          // NOVO BOTÃO — navega diretamente para EnviarImagem
+          _buildMenuButton(
+            icon: Icons.analytics_outlined,
+            label: "Análise Avulsa",
+            isSelected: indiceSelecionado == 3,
+            onTap: () {
+              // fecha drawer se mobile e depois navega
+              if (isMobile) {
+                Navigator.pop(context);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => EnviarImagem(obraId: obraId)),
+                  );
+                });
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => EnviarImagem(obraId: obraId)),
+                );
+              }
+            },
+          ),
+
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton.icon(
